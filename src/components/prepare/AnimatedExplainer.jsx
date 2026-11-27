@@ -75,6 +75,24 @@ const SCENES = {
       caption: 'Only one matching branch runs. Output printed: "Grade A".',
     },
   ],
+  'methods-flow': [
+    {
+      title: 'Step 1: Call Method from main()',
+      caption: '`int ans = add(4, 6);` pauses main() and sends inputs `4` and `6` to the `add` method.',
+    },
+    {
+      title: 'Step 2: Parameters Receive Values',
+      caption: 'Inside `static int add(int a, int b)`, `a` gets `4` and `b` gets `6`.',
+    },
+    {
+      title: 'Step 3: Method Computes & Returns Result',
+      caption: '`return a + b;` sends `10` back to where `add(4, 6)` was called.',
+    },
+    {
+      title: 'Step 4: main() Receives Output',
+      caption: '`ans` becomes `10` and `System.out.println(ans);` prints `10`!',
+    },
+  ],
   'class-objects': [
     {
       title: 'Step 1: Define the Class Blueprint',
@@ -316,6 +334,46 @@ export default function AnimatedExplainer({ animationType = 'jvm-pipeline' }) {
                   {branch.cond}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {animationType === 'methods-flow' && (
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <div
+              className={`p-3 rounded-2xl border-2 font-mono text-xs transition-all duration-500 ${
+                step === 0 || step === 3
+                  ? 'bg-emerald-700 text-white border-emerald-700 scale-105 shadow-md'
+                  : 'bg-white text-stone-700 border-stone-200'
+              }`}
+            >
+              <div className="text-[10px] font-sans uppercase font-bold opacity-80">main()</div>
+              <div>int ans = add(4, 6);</div>
+              <div className="text-[11px] mt-1 font-bold">
+                ans = {step === 3 ? '10 (Printed!)' : '?'}
+              </div>
+            </div>
+
+            <ArrowRight
+              className={`w-5 h-5 transition-colors ${
+                step >= 1 ? 'text-emerald-700' : 'text-stone-300'
+              }`}
+            />
+
+            <div
+              className={`p-3 rounded-2xl border-2 font-mono text-xs transition-all duration-500 ${
+                step === 1 || step === 2
+                  ? 'bg-amber-50 text-amber-950 border-amber-600 scale-105 shadow-md'
+                  : 'bg-white text-stone-700 border-stone-200'
+              }`}
+            >
+              <div className="text-[10px] font-sans uppercase font-bold text-amber-800">
+                static int add(int a, int b)
+              </div>
+              <div>{step >= 1 ? 'a = 4, b = 6' : 'Waiting for call...'}</div>
+              <div className="text-[11px] font-bold text-emerald-700 mt-1">
+                {step >= 2 ? 'return 10;' : ''}
+              </div>
             </div>
           </div>
         )}
