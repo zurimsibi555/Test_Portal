@@ -1,35 +1,21 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { CheckCircle2, XCircle, RotateCcw, HelpCircle } from 'lucide-react';
 import { PRACTICE_MCQS } from '@/data/prepareTopics';
 
 export default function McqPracticePanel() {
-  const [selectedTopic, setSelectedTopic] = useState('All');
   const [answers, setAnswers] = useState({});
 
-  const topics = useMemo(
-    () => ['All', ...Array.from(new Set(PRACTICE_MCQS.map((q) => q.topic)))],
-    []
-  );
-
-  const filteredQuestions = useMemo(
-    () =>
-      selectedTopic === 'All'
-        ? PRACTICE_MCQS
-        : PRACTICE_MCQS.filter((q) => q.topic === selectedTopic),
-    [selectedTopic]
-  );
-
-  const answeredCount = filteredQuestions.filter((q) => answers[q.id] !== undefined).length;
-  const correctCount = filteredQuestions.filter(
+  const answeredCount = PRACTICE_MCQS.filter((q) => answers[q.id] !== undefined).length;
+  const correctCount = PRACTICE_MCQS.filter(
     (q) => answers[q.id] === q.correctOption
   ).length;
 
   return (
     <div className="space-y-4">
-      {/* Header & Topic Filters */}
-      <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs space-y-3">
+      {/* Header */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center">
@@ -37,7 +23,7 @@ export default function McqPracticePanel() {
             </div>
             <div>
               <h2 className="text-sm font-bold text-stone-900">
-                MCQ Practice Bank ({filteredQuestions.length} Questions)
+                MCQ Practice Bank ({PRACTICE_MCQS.length} Questions)
               </h2>
               <p className="text-[11px] text-stone-500">
                 Score: <strong className="text-emerald-700">{correctCount}</strong> / {answeredCount} answered
@@ -53,27 +39,11 @@ export default function McqPracticePanel() {
             <span>Reset Quiz</span>
           </button>
         </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {topics.map((topic) => (
-            <button
-              key={topic}
-              onClick={() => setSelectedTopic(topic)}
-              className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition ${
-                selectedTopic === topic
-                  ? 'bg-emerald-700 text-white border-emerald-700'
-                  : 'bg-[#FAF8F5] text-stone-600 border-stone-200 hover:bg-stone-100'
-              }`}
-            >
-              {topic}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Question Cards */}
       <div className="space-y-3">
-        {filteredQuestions.map((q, idx) => {
+        {PRACTICE_MCQS.map((q, idx) => {
           const picked = answers[q.id];
           const hasPicked = picked !== undefined;
           const isCorrect = picked === q.correctOption;
@@ -83,14 +53,8 @@ export default function McqPracticePanel() {
               key={q.id}
               className="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs space-y-3"
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold uppercase">
-                  {q.topic}
-                </span>
-                <span className="text-[11px] font-mono text-stone-400">#{idx + 1}</span>
-              </div>
-
-              <h3 className="text-xs md:text-sm font-semibold text-stone-900 leading-relaxed">
+              <h3 className="text-xs md:text-sm font-semibold text-stone-900 leading-relaxed whitespace-pre-wrap">
+                <span className="font-bold text-emerald-700 mr-1.5">Q{idx + 1}.</span>
                 {q.question}
               </h3>
 
