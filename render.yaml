@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: podcast-exam-portal
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: ADMIN_SECRET_KEY
+        value: teacher123
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
