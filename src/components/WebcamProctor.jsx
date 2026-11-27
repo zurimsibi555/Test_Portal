@@ -12,6 +12,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { downsampleFloat32ToInt16, int16ToBase64 } from '@/lib/audioPcm';
+import { RTC_ICE_SERVERS } from '@/lib/webrtcConfig';
 
 const TARGET_SAMPLE_RATE = 16000;
 const SAMPLES_PER_CHUNK = 4800; // 300ms of clear 16kHz wideband voice
@@ -32,6 +33,7 @@ export default function WebcamProctor({
   const [cameraError, setCameraError] = useState('');
   const [camGranted, setCamGranted] = useState(false);
   const [micGranted, setMicGranted] = useState(false);
+  const [audioSuspended, setAudioSuspended] = useState(false);
   const [checkingPerms, setCheckingPerms] = useState(true);
   const [internalRetry, setInternalRetry] = useState(0);
   const [micLevel, setMicLevel] = useState(0);
@@ -41,15 +43,23 @@ export default function WebcamProctor({
   const [graceCountdown, setGraceCountdown] = useState(10);
 
   const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const videoOnlyStreamRef = useRef(null);
   const presenceCanvasRef = useRef(null);
   const streamCanvasRef = useRef(null);
   const checkIntervalRef = useRef(null);
   const countdownIntervalRef = useRef(null);
   const alertAudioCtxRef = useRef(null);
+  const captureCtxRef = useRef(null);
+  const autoSessionIdRef = useRef('');
+  const rtcPeersRef = useRef(new Map());
+  const rtcOutgoingRef = useRef({ answers: [], candidates: [] });
+  const hasConnectedRtcRef = useRef(false);
 
   // Voice PCM streaming refs (Priority #1)
   const audioQueueRef = useRef([]);
   const audioSeqRef = useRef(0);
+  const audioResetPendingRef = useRef(true);
   const pcmBufferRef = useRef([]);
   const pcmSampleCountRef = useRef(0);
 
@@ -61,6 +71,7 @@ export default function WebcamProctor({
   const lastMicUiUpdateRef = useRef(0);
   const camGrantedRef = useRef(false);
   const micGrantedRef = useRef(false);
+  const audioSuspendedRef = useRef(false);
   const onPermissionStatusRef = useRef(onPermissionStatus);
 
   useEffect(() => {
@@ -69,11 +80,13 @@ export default function WebcamProctor({
 
   const isPrepareMode = mode === 'PREPARE';
 
-  const notifyPerms = useCallback((cam, mic, checking = false, error = '') => {
+  const notifyPerms = useCallback((cam, mic, checking = false, error = '', audioSusp = audioSuspendedRef.current) => {
     camGrantedRef.current = cam;
     micGrantedRef.current = mic;
+    audioSuspendedRef.current = audioSusp;
     setCamGranted(cam);
     setMicGranted(mic);
+    setAudioSuspended(audioSusp);
     setCheckingPerms(checking);
     setCameraError(error);
     if (onPermissionStatusRef.current) {
@@ -82,6 +95,7 @@ export default function WebcamProctor({
         micGranted: mic,
         checking,
         error,
+        audioSuspended: audioSusp,
       });
     }
   }, []);
@@ -173,9 +187,44 @@ export default function WebcamProctor({
     let processorNode = null;
     let silentGain = null;
     let sourceNode = null;
+    let analyserNode = null;
     let cancelled = false;
     let camPermHandle = null;
     let micPermHandle = null;
+    const rtcPeers = rtcPeersRef.current;
+
+    if (!autoSessionIdRef.current) {
+      const randPart =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID().slice(0, 8)
+          : Math.random().toString(36).slice(2, 10);
+      autoSessionIdRef.current = `prep_${Date.now().toString(36)}_${randPart}`;
+    }
+
+    const syncAudioState = () => {
+      if (cancelled || !captureCtx) return;
+      const isSusp = captureCtx.state !== 'running';
+      if (audioSuspendedRef.current !== isSusp) {
+        notifyPerms(
+          camGrantedRef.current,
+          micGrantedRef.current,
+          false,
+          '',
+          isSusp
+        );
+      }
+    };
+
+    const resumeAudioOnGesture = () => {
+      if (captureCtx && captureCtx.state === 'suspended') {
+        captureCtx.resume().then(syncAudioState).catch(() => {});
+      }
+    };
+
+    const gestureEvents = ['pointerdown', 'pointerup', 'mousedown', 'touchstart', 'keydown', 'click'];
+    gestureEvents.forEach((evt) =>
+      window.addEventListener(evt, resumeAudioOnGesture, { capture: true, passive: true })
+    );
 
     const handleTrackRevoked = (message) => {
       if (cancelled) return;
@@ -187,11 +236,30 @@ export default function WebcamProctor({
         });
       }
       setStream(null);
-      notifyPerms(false, false, false, message);
+      notifyPerms(false, false, false, message, false);
     };
 
     async function initMedia() {
-      notifyPerms(false, false, true, '');
+      notifyPerms(false, false, true, '', false);
+      audioSeqRef.current = 0;
+      audioResetPendingRef.current = true;
+      audioQueueRef.current = [];
+      pcmBufferRef.current = [];
+      pcmSampleCountRef.current = 0;
+      micLevelRef.current = 0;
+
+      // Create AudioContext before awaiting getUserMedia to preserve any active user gesture
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        captureCtx = new AudioCtx({ latencyHint: 'interactive' });
+        captureCtxRef.current = captureCtx;
+        captureCtx.onstatechange = syncAudioState;
+        if (captureCtx.state === 'suspended') {
+          captureCtx.resume().then(syncAudioState).catch(() => {});
+        }
+      } catch {
+        captureCtx = null;
+      }
 
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
@@ -200,46 +268,60 @@ export default function WebcamProctor({
 
         localStream = await navigator.mediaDevices.getUserMedia({
           video: {
-            width: { ideal: 320, max: 480 },
-            height: { ideal: 240, max: 360 },
-            frameRate: { ideal: 15, max: 20 },
+            width: { ideal: 640, max: 640 },
+            height: { ideal: 480, max: 480 },
+            frameRate: { ideal: 24, max: 30 },
             facingMode: 'user',
           },
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            channelCount: 1,
           },
         });
       } catch (err) {
         if (cancelled) return;
+        if (captureCtx && captureCtx.state !== 'closed') {
+          captureCtx.close().catch(() => {});
+        }
+        captureCtxRef.current = null;
         const msg =
           err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError'
             ? 'Camera & Microphone permissions are mandatory. Please allow both in your browser settings.'
             : 'Camera or Microphone not detected/accessible. Both devices are required.';
-        notifyPerms(false, false, false, msg);
+        notifyPerms(false, false, false, msg, false);
         return;
       }
 
       if (cancelled) {
         localStream.getTracks().forEach((t) => t.stop());
+        if (captureCtx && captureCtx.state !== 'closed') {
+          captureCtx.close().catch(() => {});
+        }
         return;
       }
 
       const videoTrack = localStream.getVideoTracks()[0];
       const audioTrack = localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = true;
+      }
       const hasLiveCam = Boolean(videoTrack && videoTrack.readyState === 'live');
       const hasLiveMic = Boolean(audioTrack && audioTrack.readyState === 'live');
 
       // Enforce BOTH camera AND microphone strictly (no video-only fallback)
       if (!hasLiveCam || !hasLiveMic) {
         localStream.getTracks().forEach((t) => t.stop());
+        if (captureCtx && captureCtx.state !== 'closed') {
+          captureCtx.close().catch(() => {});
+        }
+        captureCtxRef.current = null;
         notifyPerms(
           hasLiveCam,
           hasLiveMic,
           false,
-          'Both Camera and Microphone permissions are strictly required to continue.'
+          'Both Camera and Microphone permissions are strictly required to continue.',
+          false
         );
         return;
       }
@@ -269,28 +351,41 @@ export default function WebcamProctor({
         } catch {}
       }
 
+      const initialAudioSusp = Boolean(captureCtx && captureCtx.state !== 'running');
+      streamRef.current = localStream;
       setStream(localStream);
-      notifyPerms(true, true, false, '');
+      notifyPerms(true, true, false, '', initialAudioSusp);
 
       if (videoRef.current) {
-        videoRef.current.srcObject = localStream;
+        const vOnly = new MediaStream([videoTrack]);
+        videoOnlyStreamRef.current = vOnly;
+        videoRef.current.srcObject = vOnly;
+        videoRef.current.disablePictureInPicture = true;
+        videoRef.current.disableRemotePlayback = true;
       }
 
       // Setup continuous, gap-free 16kHz PCM voice capture & RMS mic meter
       try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        captureCtx = new AudioCtx();
+        if (!captureCtx || captureCtx.state === 'closed') {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          captureCtx = new AudioCtx({ latencyHint: 'interactive' });
+          captureCtxRef.current = captureCtx;
+          captureCtx.onstatechange = syncAudioState;
+        }
+
         const audioOnlyStream = new MediaStream([audioTrack]);
         sourceNode = captureCtx.createMediaStreamSource(audioOnlyStream);
+        analyserNode = captureCtx.createAnalyser();
+        analyserNode.fftSize = 1024;
         processorNode = captureCtx.createScriptProcessor(4096, 1, 1);
         silentGain = captureCtx.createGain();
         silentGain.gain.value = 0;
 
-        pcmBufferRef.current = [];
-        pcmSampleCountRef.current = 0;
-
         processorNode.onaudioprocess = (ev) => {
           if (cancelled) return;
+          if (audioSuspendedRef.current) {
+            syncAudioState();
+          }
           const inputData = ev.inputBuffer.getChannelData(0);
 
           // 1. Compute smooth RMS mic level
@@ -341,38 +436,38 @@ export default function WebcamProctor({
           }
         };
 
+        sourceNode.connect(analyserNode);
         sourceNode.connect(processorNode);
         processorNode.connect(silentGain);
         silentGain.connect(captureCtx.destination);
 
         if (captureCtx.state === 'suspended') {
-          captureCtx.resume().catch(() => {});
+          await captureCtx.resume().catch(() => {});
         }
+        syncAudioState();
       } catch {
         // Ignore AudioContext setup errors
       }
     }
 
-    const resumeAudioOnGesture = () => {
-      if (captureCtx && captureCtx.state === 'suspended') {
-        captureCtx.resume().catch(() => {});
-      }
-    };
-    window.addEventListener('pointerdown', resumeAudioOnGesture, { passive: true });
-    window.addEventListener('keydown', resumeAudioOnGesture, { passive: true });
-
     initMedia();
 
     return () => {
       cancelled = true;
-      window.removeEventListener('pointerdown', resumeAudioOnGesture);
-      window.removeEventListener('keydown', resumeAudioOnGesture);
+      gestureEvents.forEach((evt) =>
+        window.removeEventListener(evt, resumeAudioOnGesture, { capture: true })
+      );
       if (camPermHandle) camPermHandle.onchange = null;
       if (micPermHandle) micPermHandle.onchange = null;
       if (processorNode) {
         processorNode.onaudioprocess = null;
         try {
           processorNode.disconnect();
+        } catch {}
+      }
+      if (analyserNode) {
+        try {
+          analyserNode.disconnect();
         } catch {}
       }
       if (sourceNode) {
@@ -385,9 +480,22 @@ export default function WebcamProctor({
           silentGain.disconnect();
         } catch {}
       }
-      if (captureCtx && captureCtx.state !== 'closed') {
-        captureCtx.close().catch(() => {});
+      if (captureCtx) {
+        captureCtx.onstatechange = null;
+        if (captureCtx.state !== 'closed') {
+          captureCtx.close().catch(() => {});
+        }
       }
+      captureCtxRef.current = null;
+      streamRef.current = null;
+      hasConnectedRtcRef.current = false;
+      for (const entry of rtcPeers.values()) {
+        try {
+          entry.pc.close();
+        } catch {}
+      }
+      rtcPeers.clear();
+      rtcOutgoingRef.current = { answers: [], candidates: [] };
       if (localStream) {
         localStream.getTracks().forEach((track) => {
           track.onended = null;
@@ -397,19 +505,59 @@ export default function WebcamProctor({
     };
   }, [isActive, retryTrigger, internalRetry, notifyPerms]);
 
-  // Bind video element when stream or permission state changes
+  // Bind video-only stream & strictly block Picture-in-Picture (including Chrome Auto-PiP on tab switch)
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play?.().catch(() => {});
+    const videoEl = videoRef.current;
+    if (!isActive) return;
+
+    if (videoEl && stream) {
+      const vTrack = stream.getVideoTracks()[0];
+      if (vTrack) {
+        const vOnly = new MediaStream([vTrack]);
+        videoOnlyStreamRef.current = vOnly;
+        videoEl.srcObject = vOnly;
+      } else {
+        videoEl.srcObject = stream;
+      }
+      videoEl.disablePictureInPicture = true;
+      videoEl.disableRemotePlayback = true;
+      videoEl.play?.().catch(() => {});
+      if (document.pictureInPictureElement === videoEl) {
+        document.exitPictureInPicture().catch(() => {});
+      }
     }
-  }, [stream, camGranted]);
+
+    const exitPipIfActive = () => {
+      if (document.pictureInPictureElement) {
+        document.exitPictureInPicture().catch(() => {});
+      }
+    };
+
+    try {
+      if ('mediaSession' in navigator && navigator.mediaSession?.setActionHandler) {
+        navigator.mediaSession.setActionHandler('enterpictureinpicture', null);
+      }
+    } catch {}
+
+    videoEl?.addEventListener('enterpictureinpicture', exitPipIfActive);
+    document.addEventListener('visibilitychange', exitPipIfActive);
+
+    return () => {
+      videoEl?.removeEventListener('enterpictureinpicture', exitPipIfActive);
+      document.removeEventListener('visibilitychange', exitPipIfActive);
+    };
+  }, [isActive, stream, camGranted]);
 
   // Lightweight Presence Check Loop (120x90 canvas so UI stays smooth)
   useEffect(() => {
     if (!isActive || !stream) return;
 
     checkIntervalRef.current = setInterval(() => {
+      // Auto-recover AudioContext if transiently suspended
+      if (captureCtxRef.current && captureCtxRef.current.state === 'suspended') {
+        captureCtxRef.current.resume().catch(() => {});
+      }
+
       // Verify live track health continuously
       const vTrack = stream.getVideoTracks()[0];
       const aTrack = stream.getAudioTracks()[0];
@@ -483,28 +631,175 @@ export default function WebcamProctor({
     };
   }, [isActive, stream, isPrepareMode, showWarningModal, triggerWebcamWarning, clearWebcamWarning, notifyPerms]);
 
-  // Non-overlapping streaming loop: Voice PCM chunks get top priority; adaptive video snapshots follow
+  // Non-overlapping streaming loop: WebRTC signaling + PCM/JPEG fallback
   useEffect(() => {
-    if (!isActive || !sessionId) return;
+    const activeSessionId = sessionId || autoSessionIdRef.current;
+    if (!isActive || !activeSessionId) return;
 
     let stopped = false;
     let timerId = null;
+    let inFlight = false;
     let lastFrameSentAt = 0;
     let lastPingDurationMs = 0;
 
+    const refreshConnectedRtcFlag = () => {
+      let anyConnected = false;
+      for (const entry of rtcPeersRef.current.values()) {
+        if (entry.pc?.connectionState === 'connected') {
+          anyConnected = true;
+          break;
+        }
+      }
+      hasConnectedRtcRef.current = anyConnected;
+    };
+
+    const scheduleFastPing = () => {
+      if (stopped || inFlight) return;
+      if (timerId) {
+        clearTimeout(timerId);
+        timerId = null;
+      }
+      timerId = setTimeout(sendPing, 30);
+    };
+
+    const handleRtcRequests = async (rtcRequests) => {
+      if (!Array.isArray(rtcRequests)) return;
+      const activeStream = streamRef.current;
+      const seenViewers = new Set(rtcRequests.map((r) => r.viewerId));
+
+      // Close peers whose admin viewer disconnected
+      for (const [vid, entry] of rtcPeersRef.current.entries()) {
+        if (!seenViewers.has(vid)) {
+          try {
+            entry.pc.close();
+          } catch {}
+          rtcPeersRef.current.delete(vid);
+        }
+      }
+
+      if (!activeStream || typeof RTCPeerConnection === 'undefined') {
+        refreshConnectedRtcFlag();
+        return;
+      }
+
+      for (const req of rtcRequests) {
+        if (!req?.viewerId || !req?.offerId || !req?.offer) continue;
+        let entry = rtcPeersRef.current.get(req.viewerId);
+
+        if (!entry || entry.offerId !== req.offerId) {
+          if (entry) {
+            try {
+              entry.pc.close();
+            } catch {}
+          }
+          const pc = new RTCPeerConnection({ iceServers: RTC_ICE_SERVERS });
+          entry = {
+            pc,
+            offerId: req.offerId,
+            remoteSet: false,
+            appliedCandidateCount: 0,
+            queuedCandidates: [],
+          };
+          rtcPeersRef.current.set(req.viewerId, entry);
+
+          for (const track of activeStream.getTracks()) {
+            const sender = pc.addTrack(track, activeStream);
+            if (track.kind === 'video' && sender?.getParameters && sender?.setParameters) {
+              try {
+                const params = sender.getParameters();
+                if (!params.encodings || params.encodings.length === 0) {
+                  params.encodings = [{}];
+                }
+                params.encodings[0].maxBitrate = 450000;
+                params.encodings[0].maxFramerate = 24;
+                sender.setParameters(params).catch(() => {});
+              } catch {}
+            }
+          }
+
+          pc.onicecandidate = (ev) => {
+            if (ev.candidate && !stopped) {
+              rtcOutgoingRef.current.candidates.push({
+                viewerId: req.viewerId,
+                offerId: req.offerId,
+                candidate: ev.candidate.toJSON(),
+              });
+              scheduleFastPing();
+            }
+          };
+
+          pc.onconnectionstatechange = () => {
+            refreshConnectedRtcFlag();
+          };
+
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(req.offer));
+            entry.remoteSet = true;
+            for (const c of entry.queuedCandidates) {
+              await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+            }
+            entry.queuedCandidates = [];
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            rtcOutgoingRef.current.answers.push({
+              viewerId: req.viewerId,
+              offerId: req.offerId,
+              answer: pc.localDescription.toJSON(),
+            });
+            scheduleFastPing();
+          } catch {
+            try {
+              pc.close();
+            } catch {}
+            rtcPeersRef.current.delete(req.viewerId);
+          }
+        }
+
+        const incomingCandidates = Array.isArray(req.candidates) ? req.candidates : [];
+        if (entry && incomingCandidates.length > entry.appliedCandidateCount) {
+          const fresh = incomingCandidates.slice(entry.appliedCandidateCount);
+          entry.appliedCandidateCount = incomingCandidates.length;
+          for (const cand of fresh) {
+            if (entry.remoteSet) {
+              entry.pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+            } else {
+              entry.queuedCandidates.push(cand);
+            }
+          }
+        }
+      }
+
+      refreshConnectedRtcFlag();
+    };
+
     const sendPing = async () => {
-      if (stopped) return;
+      if (stopped || inFlight) return;
+      inFlight = true;
 
       const now = Date.now();
-      // Peek audio chunks and remove only after server acknowledges so voice never drops on transient errors
-      const audioChunks = audioQueueRef.current.slice(0, 6);
+      const rtcConnected = hasConnectedRtcRef.current;
 
-      // Voice priority: skip video frame if audio backlog exists, previous request was slow (>900ms), or <1200ms elapsed
+      // When WebRTC is connected, WebRTC streams live Opus audio; avoid redundant HTTP PCM uploads
+      if (rtcConnected && audioQueueRef.current.length > 0) {
+        audioQueueRef.current = [];
+      }
+      const audioChunks = rtcConnected ? [] : audioQueueRef.current.slice(0, 6);
+      const shouldResetAudio = audioResetPendingRef.current;
+
+      const outAnswers = rtcOutgoingRef.current.answers.slice(0, 4);
+      const outCandidates = rtcOutgoingRef.current.candidates.slice(0, 20);
+      const rtcSignal =
+        outAnswers.length > 0 || outCandidates.length > 0
+          ? { answers: outAnswers, candidates: outCandidates }
+          : null;
+
+      // In fallback mode, send JPEG snapshots every 450ms (~2+ fps); when WebRTC is live, keep 4s backup thumbnail
       let frameDataUrl = null;
+      const frameIntervalMs = rtcConnected ? 4000 : 450;
       const shouldSendFrame =
         camGrantedRef.current &&
-        audioQueueRef.current.length <= 1 &&
-        now - lastFrameSentAt >= 1200 &&
+        (rtcConnected || audioQueueRef.current.length <= 2) &&
+        now - lastFrameSentAt >= frameIntervalMs &&
         lastPingDurationMs < 900;
 
       if (shouldSendFrame) {
@@ -530,7 +825,7 @@ export default function WebcamProctor({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            sessionId,
+            sessionId: activeSessionId,
             studentName,
             rollNo,
             testId,
@@ -538,6 +833,8 @@ export default function WebcamProctor({
             frameDataUrl,
             audioLevel: micLevelRef.current,
             audioChunks,
+            audioReset: shouldResetAudio,
+            rtcSignal,
             camGranted: camGrantedRef.current,
             micGranted: micGrantedRef.current,
             isPresent: isPresentRef.current,
@@ -545,18 +842,42 @@ export default function WebcamProctor({
           }),
         });
         lastPingDurationMs = Date.now() - startedAt;
-        if (res.ok && audioChunks.length > 0) {
-          audioQueueRef.current.splice(0, audioChunks.length);
+        if (res.ok) {
+          if (shouldResetAudio) {
+            audioResetPendingRef.current = false;
+          }
+          if (audioChunks.length > 0) {
+            audioQueueRef.current.splice(0, audioChunks.length);
+          }
+          if (outAnswers.length > 0) {
+            rtcOutgoingRef.current.answers.splice(0, outAnswers.length);
+          }
+          if (outCandidates.length > 0) {
+            rtcOutgoingRef.current.candidates.splice(0, outCandidates.length);
+          }
         }
         const data = await res.json();
         if (data.terminate && !isPrepareMode && onViolation) {
           onViolation(data.terminateReason || 'Exam terminated by Administrator');
         }
+        if (Array.isArray(data.rtcRequests)) {
+          await handleRtcRequests(data.rtcRequests);
+        }
       } catch {
         lastPingDurationMs = Date.now() - startedAt;
       } finally {
+        inFlight = false;
         if (!stopped) {
-          const nextDelay = audioQueueRef.current.length > 0 ? 120 : 320;
+          const hasPendingRtc =
+            rtcOutgoingRef.current.answers.length > 0 ||
+            rtcOutgoingRef.current.candidates.length > 0;
+          const nextDelay = hasPendingRtc
+            ? 60
+            : audioQueueRef.current.length > 0
+            ? 120
+            : rtcConnected
+            ? 650
+            : 280;
           timerId = setTimeout(sendPing, nextDelay);
         }
       }
@@ -577,14 +898,22 @@ export default function WebcamProctor({
       <div className="hidden" aria-hidden="true">
         <canvas ref={presenceCanvasRef} className="hidden" />
         <canvas ref={streamCanvasRef} className="hidden" />
-        <video ref={videoRef} autoPlay playsInline muted className="hidden" />
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          disablePictureInPicture
+          disableRemotePlayback
+          className="hidden"
+        />
       </div>
     );
   }
 
   const permissionsMissing = !checkingPerms && (!camGranted || !micGranted);
 
-  // EXAM MODE: Visible Webcam + Mic Monitor PiP Badge + Forceful Permission Block
+  // EXAM MODE: Visible Webcam + Mic Monitor Badge + Forceful Permission Block
   return (
     <>
       <canvas ref={presenceCanvasRef} className="hidden" />
@@ -621,6 +950,8 @@ export default function WebcamProctor({
               autoPlay
               playsInline
               muted
+              disablePictureInPicture
+              disableRemotePlayback
               className="w-full h-full object-cover mirror scale-x-[-1]"
             />
           )}
@@ -660,6 +991,16 @@ export default function WebcamProctor({
             {micGranted ? `${micLevel}%` : 'Off'}
           </span>
         </div>
+
+        {micGranted && audioSuspended && (
+          <button
+            type="button"
+            onClick={() => captureCtxRef.current?.resume?.().catch(() => {})}
+            className="w-full py-1 px-2 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-bold transition"
+          >
+            Tap to Activate Mic Audio
+          </button>
+        )}
       </div>
 
       {/* FORCEFUL EXAM PERMISSION LOCK OVERLAY (Non-dismissible until BOTH Camera & Mic granted) */}

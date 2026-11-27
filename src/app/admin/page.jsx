@@ -7,6 +7,33 @@ import Link from 'next/link';
 import AddCodingQuestion from '@/components/admin/AddCodingQuestion';
 import AddMcqQuestion from '@/components/admin/AddMcqQuestion';
 import { base64ToFloat32 } from '@/lib/audioPcm';
+import { RTC_ICE_SERVERS } from '@/lib/webrtcConfig';
+
+function RtcLiveVideo({ stream, muted }) {
+  const videoElRef = useRef(null);
+
+  useEffect(() => {
+    const el = videoElRef.current;
+    if (!el || !stream) return;
+    if (el.srcObject !== stream) {
+      el.srcObject = stream;
+    }
+    el.muted = muted;
+    el.volume = 1;
+    el.play?.().catch(() => {});
+  }, [stream, muted]);
+
+  return (
+    <video
+      ref={videoElRef}
+      autoPlay
+      playsInline
+      muted={muted}
+      disablePictureInPicture
+      className="w-full h-full object-cover"
+    />
+  );
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -19,9 +46,11 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState({ type: '', message: '' });
 
-  // Live monitor & seamless Web Audio PCM player state
+  // Live monitor & WebRTC + Web Audio PCM fallback state
   const [liveFeeds, setLiveFeeds] = useState([]);
   const [listeningSessionId, setListeningSessionId] = useState(null);
+  const [rtcRemoteStreams, setRtcRemoteStreams] = useState({});
+  const [rtcConnectedMap, setRtcConnectedMap] = useState({});
   const [authLoading, setAuthLoading] = useState(false);
   const listeningSessionIdRef = useRef(null);
   const audioCtxRef = useRef(null);
@@ -29,6 +58,10 @@ export default function AdminPage() {
   const nextAudioTimeRef = useRef(0);
   const lastAudioSeqRef = useRef(0);
   const knownFramesRef = useRef({});
+  const viewerIdRef = useRef('');
+  const rtcPeersRef = useRef(new Map());
+  const rtcConnectedRef = useRef({});
+  const rtcRetryAtRef = useRef({});
 
   // Form states
   const [testForm, setTestForm] = useState({ title: '', description: '', durationMinutes: 120 });
@@ -316,10 +349,206 @@ export default function AdminPage() {
     [ensureAudioContext]
   );
 
+  const closeAllRtcPeers = useCallback((notifyServer = false) => {
+    for (const entry of rtcPeersRef.current.values()) {
+      try {
+        entry.pc.close();
+      } catch {}
+    }
+    rtcPeersRef.current.clear();
+    rtcConnectedRef.current = {};
+    Promise.resolve().then(() => {
+      setRtcRemoteStreams({});
+      setRtcConnectedMap({});
+    });
+    if (notifyServer && viewerIdRef.current) {
+      fetch('/api/admin/monitor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rtc_close', viewerId: viewerIdRef.current }),
+      }).catch(() => {});
+    }
+  }, []);
+
+  const closeRtcPeerForSession = useCallback((sessionId) => {
+    const entry = rtcPeersRef.current.get(sessionId);
+    if (entry) {
+      try {
+        entry.pc.close();
+      } catch {}
+      rtcPeersRef.current.delete(sessionId);
+    }
+    if (rtcConnectedRef.current[sessionId]) {
+      rtcConnectedRef.current[sessionId] = false;
+      setRtcConnectedMap((prev) => {
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
+      });
+    }
+    setRtcRemoteStreams((prev) => {
+      if (!prev[sessionId]) return prev;
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
+  }, []);
+
+  const syncRtcPeers = useCallback(
+    async (feeds) => {
+      if (typeof RTCPeerConnection === 'undefined') return;
+      if (!viewerIdRef.current) {
+        viewerIdRef.current = `viewer_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+      }
+      const viewerId = viewerIdRef.current;
+      const activeIds = new Set(feeds.map((f) => f.sessionId));
+
+      for (const sid of Array.from(rtcPeersRef.current.keys())) {
+        if (!activeIds.has(sid)) {
+          closeRtcPeerForSession(sid);
+        }
+      }
+
+      const now = Date.now();
+      for (const feed of feeds) {
+        const sid = feed.sessionId;
+        if (!feed.camGranted || !feed.micGranted) {
+          closeRtcPeerForSession(sid);
+          continue;
+        }
+
+        let entry = rtcPeersRef.current.get(sid);
+        if (!entry) {
+          const retryAt = rtcRetryAtRef.current[sid] || 0;
+          if (now < retryAt) continue;
+
+          const pc = new RTCPeerConnection({ iceServers: RTC_ICE_SERVERS });
+          const offerId = `off_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+          const remoteStream = new MediaStream();
+
+          entry = {
+            pc,
+            offerId,
+            remoteStream,
+            remoteSet: false,
+            appliedCandidateCount: 0,
+            queuedCandidates: [],
+            disconnectedTimer: null,
+          };
+          rtcPeersRef.current.set(sid, entry);
+
+          pc.addTransceiver('video', { direction: 'recvonly' });
+          pc.addTransceiver('audio', { direction: 'recvonly' });
+
+          pc.ontrack = (ev) => {
+            if (ev.track && !remoteStream.getTracks().some((t) => t.id === ev.track.id)) {
+              remoteStream.addTrack(ev.track);
+            }
+            setRtcRemoteStreams((prev) => ({ ...prev, [sid]: remoteStream }));
+          };
+
+          pc.onicecandidate = (ev) => {
+            if (ev.candidate) {
+              fetch('/api/admin/monitor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'rtc_ice',
+                  sessionId: sid,
+                  viewerId,
+                  offerId,
+                  candidate: ev.candidate.toJSON(),
+                }),
+              }).catch(() => {});
+            }
+          };
+
+          pc.onconnectionstatechange = () => {
+            const state = pc.connectionState;
+            if (state === 'connected') {
+              if (entry.disconnectedTimer) {
+                clearTimeout(entry.disconnectedTimer);
+                entry.disconnectedTimer = null;
+              }
+              rtcConnectedRef.current[sid] = true;
+              setRtcConnectedMap((prev) => ({ ...prev, [sid]: true }));
+            } else if (state === 'failed' || state === 'closed') {
+              rtcRetryAtRef.current[sid] = Date.now() + 4000;
+              closeRtcPeerForSession(sid);
+            } else if (state === 'disconnected' && !entry.disconnectedTimer) {
+              entry.disconnectedTimer = setTimeout(() => {
+                if (pc.connectionState !== 'connected') {
+                  rtcRetryAtRef.current[sid] = Date.now() + 4000;
+                  closeRtcPeerForSession(sid);
+                }
+              }, 3500);
+            }
+          };
+
+          try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            await fetch('/api/admin/monitor', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'rtc_offer',
+                sessionId: sid,
+                viewerId,
+                offerId,
+                offer: pc.localDescription.toJSON(),
+              }),
+            });
+          } catch {
+            rtcRetryAtRef.current[sid] = Date.now() + 5000;
+            closeRtcPeerForSession(sid);
+          }
+          continue;
+        }
+
+        const sig = feed.rtcSignal;
+        if (sig && sig.offerId === entry.offerId) {
+          if (sig.answer && !entry.remoteSet) {
+            entry.remoteSet = true;
+            try {
+              await entry.pc.setRemoteDescription(new RTCSessionDescription(sig.answer));
+              for (const c of entry.queuedCandidates) {
+                await entry.pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+              }
+              entry.queuedCandidates = [];
+            } catch {
+              rtcRetryAtRef.current[sid] = Date.now() + 4000;
+              closeRtcPeerForSession(sid);
+              continue;
+            }
+          }
+
+          const candidates = Array.isArray(sig.candidates) ? sig.candidates : [];
+          if (candidates.length > entry.appliedCandidateCount) {
+            const fresh = candidates.slice(entry.appliedCandidateCount);
+            entry.appliedCandidateCount = candidates.length;
+            for (const cand of fresh) {
+              if (entry.remoteSet) {
+                entry.pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+              } else {
+                entry.queuedCandidates.push(cand);
+              }
+            }
+          }
+        }
+      }
+    },
+    [closeRtcPeerForSession]
+  );
+
   const fetchLiveFeeds = useCallback(async () => {
     try {
+      if (!viewerIdRef.current) {
+        viewerIdRef.current = `viewer_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+      }
       const targetSid = listeningSessionIdRef.current;
       const params = new URLSearchParams();
+      params.set('viewerId', viewerIdRef.current);
       if (targetSid) {
         params.set('listeningSessionId', targetSid);
         params.set('afterAudioSeq', String(lastAudioSeqRef.current || 0));
@@ -349,21 +578,31 @@ export default function AdminPage() {
         knownFramesRef.current = nextKnown;
         setLiveFeeds(feeds);
 
+        syncRtcPeers(feeds);
+
         if (targetSid) {
           const target = feeds.find((f) => f.sessionId === targetSid);
-          if (target?.audioChunks?.length > 0) {
-            playPcmChunks(target.audioChunks);
+          if (target) {
+            // If student restarted their audio stream (seq reset), resync admin sequence cursor
+            if ((target.latestAudioSeq || 0) < lastAudioSeqRef.current) {
+              lastAudioSeqRef.current = Math.max(0, (target.latestAudioSeq || 0) - 2);
+            }
+            // Only play HTTP PCM fallback if WebRTC audio stream is not yet connected
+            if (!rtcConnectedRef.current[targetSid] && target.audioChunks?.length > 0) {
+              playPcmChunks(target.audioChunks);
+            }
           }
         }
       }
     } catch {
       // ignore
     }
-  }, [playPcmChunks]);
+  }, [playPcmChunks, syncRtcPeers]);
 
   useEffect(() => {
     if (!isAuthenticated || activeTab !== 'monitor') {
       stopAudioPlayer();
+      closeAllRtcPeers(true);
       return;
     }
 
@@ -374,7 +613,10 @@ export default function AdminPage() {
       if (stopped) return;
       await fetchLiveFeeds();
       if (!stopped) {
-        const delay = listeningSessionIdRef.current ? 280 : 900;
+        const hasPendingRtc = Array.from(rtcPeersRef.current.values()).some(
+          (e) => e.pc?.connectionState !== 'connected'
+        );
+        const delay = listeningSessionIdRef.current || hasPendingRtc ? 280 : 600;
         timerId = setTimeout(loop, delay);
       }
     };
@@ -383,8 +625,9 @@ export default function AdminPage() {
     return () => {
       stopped = true;
       if (timerId) clearTimeout(timerId);
+      closeAllRtcPeers(true);
     };
-  }, [isAuthenticated, activeTab, fetchLiveFeeds, stopAudioPlayer]);
+  }, [isAuthenticated, activeTab, fetchLiveFeeds, stopAudioPlayer, closeAllRtcPeers]);
 
   const handleToggleListen = (feed) => {
     if (listeningSessionId === feed.sessionId) {
@@ -851,9 +1094,14 @@ export default function AdminPage() {
                         </span>
                       </div>
 
-                      {/* Webcam Snapshot Preview */}
+                      {/* Webcam Live Stream (WebRTC HD primary, JPEG snapshot fallback) */}
                       <div className="relative rounded-xl overflow-hidden bg-[#FAF8F5] border border-stone-200 aspect-[4/3] flex items-center justify-center">
-                        {feed.frameDataUrl ? (
+                        {rtcRemoteStreams[feed.sessionId] && rtcConnectedMap[feed.sessionId] ? (
+                          <RtcLiveVideo
+                            stream={rtcRemoteStreams[feed.sessionId]}
+                            muted={!isListening}
+                          />
+                        ) : feed.frameDataUrl ? (
                           <img
                             src={feed.frameDataUrl}
                             alt={`Live feed of ${feed.studentName}`}
@@ -873,6 +1121,11 @@ export default function AdminPage() {
                           >
                             {feed.isPresent ? 'Present' : 'Not Visible'}
                           </span>
+                          {rtcConnectedMap[feed.sessionId] && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-600/90 text-white backdrop-blur">
+                              LIVE HD
+                            </span>
+                          )}
                         </div>
                       </div>
 

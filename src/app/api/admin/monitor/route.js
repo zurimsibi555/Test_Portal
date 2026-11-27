@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getStore, saveStore } from '@/lib/store';
-import { listActiveLiveFeeds, requestSessionTermination } from '@/lib/liveMonitor';
+import {
+  listActiveLiveFeeds,
+  requestSessionTermination,
+  upsertRtcOffer,
+  addRtcAdminCandidate,
+  closeRtcViewer,
+} from '@/lib/liveMonitor';
 import { saveSubmissionPdf } from '@/lib/pdfReport';
 import { verifyAdmin } from '@/lib/adminAuth';
 
@@ -15,6 +21,7 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const listeningSessionId = searchParams.get('listeningSessionId') || null;
     const afterAudioSeq = Number(searchParams.get('afterAudioSeq') || 0);
+    const viewerId = searchParams.get('viewerId') || null;
     const frameSeqsRaw = searchParams.get('frameSeqs') || '';
     const knownFrameSeqs = {};
     if (frameSeqsRaw) {
@@ -28,6 +35,7 @@ export async function GET(req) {
       listeningSessionId,
       afterAudioSeq,
       knownFrameSeqs,
+      viewerId,
     });
     return NextResponse.json(
       {
@@ -48,9 +56,25 @@ export async function POST(req) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { action, sessionId, reason } = await req.json();
+    const { action, sessionId, reason, viewerId, offerId, offer, candidate } = await req.json();
+
+    if (action === 'rtc_close') {
+      closeRtcViewer(viewerId, sessionId || null);
+      return NextResponse.json({ success: true });
+    }
+
     if (!sessionId) {
       return NextResponse.json({ success: false, message: 'sessionId is required' }, { status: 400 });
+    }
+
+    if (action === 'rtc_offer') {
+      const ok = upsertRtcOffer(sessionId, viewerId, offerId, offer);
+      return NextResponse.json({ success: ok });
+    }
+
+    if (action === 'rtc_ice') {
+      const ok = addRtcAdminCandidate(sessionId, viewerId, offerId, candidate);
+      return NextResponse.json({ success: ok });
     }
 
     if (action === 'terminate') {

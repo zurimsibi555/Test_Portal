@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import {
   Play,
@@ -35,6 +35,13 @@ export default function CodeEditor({
   const [activeConsoleTab, setActiveConsoleTab] = useState(
     initialEvaluation ? 'tests' : 'output'
   ); // 'output' | 'tests'
+  const consoleSectionRef = useRef(null);
+
+  const scrollConsoleIntoView = () => {
+    requestAnimationFrame(() => {
+      consoleSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    });
+  };
 
   useEffect(() => {
     setCode(initialCode || question.starterCode || '');
@@ -86,6 +93,7 @@ export default function CodeEditor({
       setErrorOutput(`Network error: ${err.message}`);
     } finally {
       setIsRunning(false);
+      scrollConsoleIntoView();
     }
   };
 
@@ -123,6 +131,7 @@ export default function CodeEditor({
       return null;
     } finally {
       setIsEvaluating(false);
+      scrollConsoleIntoView();
     }
   };
 
@@ -144,9 +153,9 @@ export default function CodeEditor({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white text-stone-800 rounded-2xl overflow-hidden border border-stone-200 shadow-sm">
+    <div className="flex flex-col h-full bg-white text-stone-800 rounded-2xl overflow-y-auto border border-stone-200 shadow-sm">
       {/* Editor Top Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-[#FAF8F5] border-b border-stone-200 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-[#FAF8F5] border-b border-stone-200 text-xs shrink-0">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 font-semibold text-stone-700">
             <FileCode2 className="w-4 h-4 text-emerald-700" />
@@ -225,7 +234,7 @@ export default function CodeEditor({
       </div>
 
       {/* Monaco Code Editor in Clean Theme */}
-      <div className="flex-1 min-h-[320px] relative border-b border-stone-200">
+      <div className="flex-1 min-h-[240px] relative border-b border-stone-200">
         <Editor
           height="100%"
           language="java"
@@ -247,9 +256,9 @@ export default function CodeEditor({
       </div>
 
       {/* Console & Test Cases Output Bottom Section */}
-      <div className="h-64 bg-[#FAF8F5] flex flex-col">
+      <div ref={consoleSectionRef} className="h-64 shrink-0 bg-[#FAF8F5] flex flex-col">
         {/* Console Header Tabs */}
-        <div className="flex items-center justify-between px-3 border-b border-stone-200 bg-white text-xs">
+        <div className="flex items-center justify-between px-3 border-b border-stone-200 bg-white text-xs shrink-0">
           <div className="flex gap-2">
             <button
               onClick={() => setActiveConsoleTab('output')}
@@ -293,23 +302,23 @@ export default function CodeEditor({
         </div>
 
         {/* Tab Body */}
-        <div className="flex-1 overflow-auto p-3 text-xs font-mono bg-white">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 text-xs font-mono bg-white">
           {activeConsoleTab === 'output' ? (
-            <div className="grid grid-cols-2 gap-3 h-full">
-              <div className="flex flex-col">
-                <label className="text-[11px] font-semibold text-slate-600 mb-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 h-full min-h-[160px]">
+              <div className="flex flex-col min-h-0 h-full">
+                <label className="text-[11px] font-semibold text-slate-600 mb-1 shrink-0">
                   Standard Input (stdin):
                 </label>
                 <textarea
                   value={customInput}
                   onChange={(e) => setCustomInput(e.target.value)}
                   placeholder="Provide standard input for your program..."
-                  className="flex-1 w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 text-xs font-mono resize-none transition"
+                  className="flex-1 min-h-[110px] w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 text-xs font-mono resize-none transition"
                 />
               </div>
 
-              <div className="flex flex-col">
-                <div className="flex items-center justify-between mb-1">
+              <div className="flex flex-col min-h-0 h-full">
+                <div className="flex items-center justify-between mb-1 shrink-0">
                   <label className="text-[11px] font-semibold text-slate-600">
                     Standard Output / Diagnostics:
                   </label>
@@ -323,7 +332,7 @@ export default function CodeEditor({
                     </span>
                   ) : null}
                 </div>
-                <div className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-lg overflow-auto space-y-2">
+                <div className="flex-1 min-h-[110px] p-2.5 bg-slate-50 border border-slate-200 rounded-lg overflow-auto space-y-2">
                   {output && (
                     <div>
                       <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Program Output:</div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useId, useRef } from 'react';
+import { useState, useRef } from 'react';
 import Link from 'next/link';
 import {
   BookOpen,
@@ -28,14 +28,13 @@ import McqPracticePanel from '@/components/prepare/McqPracticePanel';
 import { PREPARE_TOPICS } from '@/data/prepareTopics';
 
 export default function PreparePage() {
-  const reactId = useId();
-  const prepSessionId = `prep_${reactId.replace(/[^a-zA-Z0-9]/g, '')}`;
   const practiceCounterRef = useRef(0);
   const [permStatus, setPermStatus] = useState({
     camGranted: false,
     micGranted: false,
     checking: true,
     error: '',
+    audioSuspended: false,
   });
   const [permRetryCount, setPermRetryCount] = useState(0);
   const [activeTabId, setActiveTabId] = useState(PREPARE_TOPICS[0].id); // topic.id | 'mcq-practice'
@@ -78,8 +77,7 @@ export default function PreparePage() {
     <div className="min-h-screen bg-[#FAF8F5] text-stone-800 flex flex-col">
       {/* Hidden Camera & Microphone Proctor in PREPARE mode */}
       <WebcamProctor
-        isActive={Boolean(prepSessionId)}
-        sessionId={prepSessionId}
+        isActive={true}
         mode="PREPARE"
         studentName="Practice Student"
         rollNo="PREPARE-MODE"
@@ -87,6 +85,22 @@ export default function PreparePage() {
         retryTrigger={permRetryCount}
         onPermissionStatus={setPermStatus}
       />
+
+      {/* Audio activation banner if browser autoplay policy paused AudioContext before first page click */}
+      {permStatus.camGranted && permStatus.micGranted && permStatus.audioSuspended && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-xs text-amber-900 flex flex-wrap items-center justify-center gap-2 z-30">
+          <Mic className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+          <span>
+            Browser paused microphone audio until page interaction. Click below to activate live mic monitoring.
+          </span>
+          <button
+            type="button"
+            className="px-3 py-1 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold text-[11px] transition"
+          >
+            Activate Mic Audio
+          </button>
+        </div>
+      )}
 
       {/* MANDATORY CAMERA & MICROPHONE GATE IN PREPARE MODE */}
       {(!permStatus.camGranted || !permStatus.micGranted) && (
@@ -491,9 +505,9 @@ export default function PreparePage() {
 
       {/* Practice Compiler Modal (Opens when student clicks "Practice" on any code block) */}
       {compilerOpen && (
-        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6">
-          <div className="bg-white border border-stone-200 rounded-3xl w-full max-w-5xl h-[88vh] flex flex-col overflow-hidden shadow-2xl">
-            <div className="px-5 py-3 bg-[#FAF8F5] border-b border-stone-200 flex items-center justify-between gap-3">
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6">
+          <div className="bg-white border border-stone-200 rounded-3xl w-full max-w-5xl h-[90vh] max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="px-5 py-3 bg-[#FAF8F5] border-b border-stone-200 flex items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-2">
                 <Code2 className="w-4 h-4 text-emerald-700" />
                 <span className="font-bold text-sm text-stone-900">
@@ -508,7 +522,7 @@ export default function PreparePage() {
                 <span>Close Compiler</span>
               </button>
             </div>
-            <div className="flex-1 min-h-0 p-3 bg-[#FAF8F5]">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 bg-[#FAF8F5]">
               <CodeEditor key={compilerQuestion.id} question={compilerQuestion} />
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getStore, saveStore } from '@/lib/store';
-import { updateLiveFeed, getLiveFeed } from '@/lib/liveMonitor';
+import { updateLiveFeed, getLiveFeed, getRtcRequestsForStudent } from '@/lib/liveMonitor';
 
 export async function POST(req) {
   try {
@@ -14,6 +14,8 @@ export async function POST(req) {
       frameDataUrl,
       audioLevel,
       audioChunks,
+      audioReset,
+      rtcSignal,
       camGranted,
       micGranted,
       isPresent,
@@ -24,8 +26,9 @@ export async function POST(req) {
       return NextResponse.json({ success: false, message: 'sessionId is required' }, { status: 400 });
     }
 
-    const store = getStore();
-    const session = store.sessions[sessionId];
+    const isPreparePing = mode === 'PREPARE' || String(sessionId).startsWith('prep_');
+    const store = isPreparePing ? null : getStore();
+    const session = store?.sessions?.[sessionId];
 
     const updated = updateLiveFeed(sessionId, {
       studentName: session?.studentName || studentName || 'Preparation Mode',
@@ -35,6 +38,8 @@ export async function POST(req) {
       frameDataUrl,
       audioLevel,
       audioChunks,
+      audioReset,
+      rtcSignal,
       camGranted,
       micGranted,
       isPresent,
@@ -42,7 +47,7 @@ export async function POST(req) {
     });
 
     // Only write store.json when permission status changes to avoid disk I/O lag on every ping
-    if (session && !session.isSubmitted) {
+    if (session && !session.isSubmitted && store) {
       const nextCam = Boolean(camGranted);
       const nextMic = Boolean(micGranted);
       if (session.camGranted !== nextCam || session.micGranted !== nextMic) {
@@ -54,10 +59,12 @@ export async function POST(req) {
     }
 
     const feed = getLiveFeed(sessionId);
+    const rtcRequests = getRtcRequestsForStudent(sessionId);
     return NextResponse.json({
       success: true,
       terminate: Boolean(feed?.terminateRequested || session?.violated),
       terminateReason: feed?.terminateReason || session?.violationReason || null,
+      rtcRequests,
       updatedAt: updated?.updatedAt,
     });
   } catch (error) {
