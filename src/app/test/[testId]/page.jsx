@@ -399,7 +399,7 @@ function TestContent() {
 
           <h1 className="text-2xl font-bold text-stone-900 mb-1">{testData.title}</h1>
           <p className="text-xs text-stone-500 mb-6">
-            Duration: <span className="text-emerald-700 font-semibold">{testData.durationMinutes} Minutes</span> | Total: <span className="font-semibold text-stone-800">100 Marks</span> (20 MCQs × 2.5 + 5 Coding × 10).
+            Duration: <span className="text-emerald-700 font-semibold">{testData.durationMinutes} Minutes</span> | Total: <span className="font-semibold text-stone-800">100 Marks</span> ({testData.mcqs.length} MCQs × 2.5 + {testData.coding.length} Coding × 5).
           </p>
 
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 text-xs text-amber-900 space-y-1.5">
@@ -940,7 +940,7 @@ function TestContent() {
               </span>
             </div>
             <p className="text-[10px] text-stone-500">
-              2.5 marks per MCQ &bull; 10 marks per Java solution
+              2.5 marks per MCQ &bull; 5 marks per Java solution
             </p>
           </div>
         </aside>

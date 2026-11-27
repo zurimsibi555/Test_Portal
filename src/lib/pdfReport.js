@@ -113,7 +113,7 @@ export function generateSubmissionPdfBuffer(submission) {
   const boxWidth = (contentWidth - 20) / 3;
   const summaryBoxes = [
     { label: 'SECTION 1: MCQs', value: `${mcqScore} / ${mcqMax}`, sub: '2.5 marks per MCQ' },
-    { label: 'SECTION 2: JAVA CODING', value: `${codeScore} / ${codeMax}`, sub: '10 marks per problem' },
+    { label: 'SECTION 2: JAVA CODING', value: `${codeScore} / ${codeMax}`, sub: '5 marks per problem' },
     { label: 'TOTAL MARKS', value: `${totalScore} / ${totalMax}`, sub: `Percentage: ${pct}%` },
   ];
 
@@ -217,7 +217,7 @@ export function generateSubmissionPdfBuffer(submission) {
       doc.setFontSize(9);
       doc.setTextColor(21, 128, 61);
       doc.text(
-        `Test Cases: ${prob.passedTests ?? 0}/${prob.totalTests ?? 0}   |   Score: ${prob.marksAwarded ?? 0} / ${prob.maxMarks ?? 10}`,
+        `Test Cases: ${prob.passedTests ?? 0}/${prob.totalTests ?? 0}   |   Score: ${prob.marksAwarded ?? 0} / ${prob.maxMarks ?? 5}`,
         pageWidth - margin - 10,
         y + 18,
         { align: 'right' }

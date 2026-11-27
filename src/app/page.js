@@ -343,10 +343,10 @@ export default function Home() {
               <div className="p-3.5 bg-[#FAF8F5] rounded-2xl border border-stone-200/80 space-y-1">
                 <div className="flex items-center gap-1.5 font-bold text-stone-900 text-[11px]">
                   <Code2 className="w-3.5 h-3.5 text-amber-700" />
-                  <span>3. 20 MCQs + 5 Coding</span>
+                  <span>3. 20 MCQs + 10 Coding</span>
                 </div>
                 <p className="text-[10px] text-stone-500 leading-relaxed">
-                  20 MCQs (2.5 marks each = 50) + 5 Java problems (10 marks each = 50).
+                  20 MCQs (2.5 marks each = 50) + 10 Java problems (5 marks each = 50).
                 </p>
               </div>
             </div>

@@ -4,19 +4,19 @@ import path from 'path';
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
 
-// Initial Seed Data
+// Initial Seed Data (matches data/store.json)
 const initialData = {
   tests: [
     {
       id: "demo-java-test",
       title: "Java Foundation Test",
-      description: "Comprehensive evaluation covering Core Java, Input/Output, Conditionals, Loops, Functions, and OOPs concepts.",
+      description: "Comprehensive evaluation covering Input/Output, Conditionals, Switch Cases, Loops, Functions, and OOPs concepts.",
       durationMinutes: 45,
       scheduledStartTime: "2026-11-27T00:00:00+05:30",
       entryWindowMinutes: 10080,
       alwaysOpen: true,
       isActive: true,
-      createdAt: new Date().toISOString()
+      createdAt: "2026-11-25T09:12:44.388Z"
     }
   ],
   mcqQuestions: [
@@ -24,37 +24,27 @@ const initialData = {
       id: "mcq-1",
       testId: "demo-java-test",
       question: "What will be the output of the following Java statement?\nSystem.out.println(10 + 20 + \"Java\" + 10 + 20);",
-      options: [
-        "60Java",
-        "30Java1020",
-        "30Java30",
-        "1020Java1020"
-      ],
+      options: ["60Java", "30Java1020", "30Java30", "1020Java1020"],
       correctOption: 1,
       points: 2.5
     },
     {
       id: "mcq-2",
       testId: "demo-java-test",
-      question: "What is the output of the following conditional statement snippet?\nint a = 5, b = 10;\nif (a > 0 || ++b > 10) {\n    System.out.println(a + \" \" + b);\n}",
-      options: [
-        "5 11",
-        "5 10",
-        "6 11",
-        "Compilation Error"
-      ],
-      correctOption: 1,
+      question: "Which Scanner method reads an entire line of text including spaces in Java?",
+      options: ["sc.next()", "sc.nextInt()", "sc.nextLine()", "sc.readLine()"],
+      correctOption: 2,
       points: 2.5
     },
     {
       id: "mcq-3",
       testId: "demo-java-test",
-      question: "What will be printed by the following loop with jump statements?\nint sum = 0;\nfor (int i = 1; i <= 5; i++) {\n    if (i == 3) continue;\n    if (i == 5) break;\n    sum += i;\n}\nSystem.out.println(sum);",
+      question: "What is the key difference between System.out.print() and System.out.println()?",
       options: [
-        "15",
-        "7",
-        "3",
-        "10"
+        "print() can only print numbers while println() prints strings",
+        "println() moves the cursor to a new line after printing",
+        "print() automatically adds a space after every output",
+        "There is no difference between them"
       ],
       correctOption: 1,
       points: 2.5
@@ -62,222 +52,152 @@ const initialData = {
     {
       id: "mcq-4",
       testId: "demo-java-test",
-      question: "What will be the output of the following method overloading code?\nclass Test {\n    static void printVal(int x) { System.out.println(\"int: \" + x); }\n    static void printVal(double x) { System.out.println(\"double: \" + x); }\n    public static void main(String[] args) {\n        printVal('A');\n    }\n}",
-      options: [
-        "int: 65",
-        "double: 65.0",
-        "char: A",
-        "Compilation Error"
-      ],
-      correctOption: 0,
+      question: "If the user enters \"25 Java\" and the program runs:\nint x = sc.nextInt();\nString s = sc.next();\nWhat is stored in variable s?",
+      options: ["25", "Java", "25 Java", "Empty string"],
+      correctOption: 1,
       points: 2.5
     },
     {
       id: "mcq-5",
       testId: "demo-java-test",
-      question: "What will be printed when a Child object is created?\nclass Parent {\n    Parent() { System.out.print(\"Base \"); }\n}\nclass Child extends Parent {\n    Child() { System.out.print(\"Derived \"); }\n}\npublic class Main {\n    public static void main(String[] args) {\n        new Child();\n    }\n}",
-      options: [
-        "Derived Base ",
-        "Base Derived ",
-        "Derived ",
-        "Base "
-      ],
+      question: "What is the output of the following if-else snippet?\nint a = 5, b = 10;\nif (a > 0 || ++b > 10) {\n    System.out.println(a + \" \" + b);\n}",
+      options: ["5 11", "5 10", "6 11", "Compilation Error"],
       correctOption: 1,
       points: 2.5
     },
     {
       id: "mcq-6",
       testId: "demo-java-test",
-      question: "Which OOPs concept binds data members and member functions into a single unit and hides direct access using private access modifiers?",
+      question: "Which if condition correctly checks whether an integer n is between 10 and 50 (inclusive)?",
       options: [
-        "Polymorphism",
-        "Encapsulation",
-        "Inheritance",
-        "Abstraction"
+        "if (10 <= n <= 50)",
+        "if (n >= 10 || n <= 50)",
+        "if (n >= 10 && n <= 50)",
+        "if (n > 10 && n < 50)"
       ],
-      correctOption: 1,
+      correctOption: 2,
       points: 2.5
     },
     {
       id: "mcq-7",
       testId: "demo-java-test",
-      question: "What is the size of a `char` data type in Java?",
-      options: [
-        "1 byte",
-        "2 bytes",
-        "4 bytes",
-        "8 bytes"
-      ],
-      correctOption: 1,
+      question: "What will be printed by the following if-else ladder?\nint marks = 72;\nif (marks >= 90) System.out.println(\"A\");\nelse if (marks >= 75) System.out.println(\"B\");\nelse if (marks >= 60) System.out.println(\"C\");\nelse System.out.println(\"D\");",
+      options: ["A", "B", "C", "D"],
+      correctOption: 2,
       points: 2.5
     },
     {
       id: "mcq-8",
       testId: "demo-java-test",
-      question: "Which keyword is used to prevent a class from being inherited in Java?",
-      options: [
-        "static",
-        "abstract",
-        "final",
-        "const"
-      ],
-      correctOption: 2,
+      question: "What is the output of the following nested if-else code?\nint x = 10;\nif (x > 5)\n    if (x < 8) System.out.println(\"One\");\n    else System.out.println(\"Two\");\nelse\n    System.out.println(\"Three\");",
+      options: ["One", "Two", "Three", "Nothing is printed"],
+      correctOption: 1,
       points: 2.5
     },
     {
       id: "mcq-9",
       testId: "demo-java-test",
-      question: "What will be the output of:\nString s1 = new String(\"Java\");\nString s2 = new String(\"Java\");\nSystem.out.println(s1 == s2);",
+      question: "In a Java switch statement, what happens if you forget to put break; at the end of a matching case?",
       options: [
-        "true",
-        "false",
-        "Compilation Error",
-        "Runtime Exception"
+        "A compilation error occurs",
+        "The program stops immediately",
+        "Execution falls through into the next case block(s) until a break or end of switch",
+        "Only the default block runs"
       ],
-      correctOption: 1,
+      correctOption: 2,
       points: 2.5
     },
     {
       id: "mcq-10",
       testId: "demo-java-test",
-      question: "Which of the following is NOT a valid access modifier in Java?",
-      options: [
-        "public",
-        "protected",
-        "private",
-        "friend"
-      ],
-      correctOption: 3,
+      question: "What will be the output of the following switch code?\nint day = 2;\nswitch (day) {\n    case 1: System.out.print(\"Mon \");\n    case 2: System.out.print(\"Tue \");\n    case 3: System.out.print(\"Wed \"); break;\n    default: System.out.print(\"Sun\");\n}",
+      options: ["Tue ", "Tue Wed ", "Mon Tue Wed ", "Tue Wed Sun"],
+      correctOption: 1,
       points: 2.5
     },
     {
       id: "mcq-11",
       testId: "demo-java-test",
-      question: "What is the default value of an uninitialized `boolean` instance variable in a Java class?",
+      question: "When does the default block execute in a Java switch statement?",
       options: [
-        "true",
-        "false",
-        "null",
-        "0"
+        "When none of the case values match (or execution falls through to it)",
+        "Always at the end of every switch",
+        "Only when case 0 matches",
+        "Before the first case"
       ],
-      correctOption: 1,
+      correctOption: 0,
       points: 2.5
     },
     {
       id: "mcq-12",
       testId: "demo-java-test",
-      question: "Which collection class allows duplicate elements and maintains insertion order?",
-      options: [
-        "HashSet",
-        "TreeSet",
-        "ArrayList",
-        "HashMap"
-      ],
-      correctOption: 2,
+      question: "What is the minimum number of times a do-while loop body executes if the condition is false from the start?",
+      options: ["0 times", "1 time", "2 times", "Infinite times"],
+      correctOption: 1,
       points: 2.5
     },
     {
       id: "mcq-13",
       testId: "demo-java-test",
-      question: "What happens if an exception is thrown inside a `try` block and there is a `finally` block?",
-      options: [
-        "The finally block is skipped",
-        "The finally block executes only if the exception is caught",
-        "The finally block always executes (unless JVM exits)",
-        "Compilation fails"
-      ],
-      correctOption: 2,
+      question: "What will be printed by the following loop with jump statements?\nint sum = 0;\nfor (int i = 1; i <= 5; i++) {\n    if (i == 3) continue;\n    if (i == 5) break;\n    sum += i;\n}\nSystem.out.println(sum);",
+      options: ["15", "7", "3", "10"],
+      correctOption: 1,
       points: 2.5
     },
     {
       id: "mcq-14",
       testId: "demo-java-test",
-      question: "Which method is used to start a new thread's execution in Java?",
-      options: [
-        "run()",
-        "start()",
-        "execute()",
-        "begin()"
-      ],
-      correctOption: 1,
+      question: "How many times will \"Hi\" be printed by this nested loop?\nfor (int i = 1; i <= 3; i++) {\n    for (int j = 1; j <= 2; j++) {\n        System.out.println(\"Hi\");\n    }\n}",
+      options: ["3", "5", "6", "2"],
+      correctOption: 2,
       points: 2.5
     },
     {
       id: "mcq-15",
       testId: "demo-java-test",
-      question: "What is the output of:\nint x = 10;\nSystem.out.println(x++ + ++x);",
-      options: [
-        "20",
-        "21",
-        "22",
-        "23"
-      ],
-      correctOption: 2,
+      question: "Which keyword skips only the current iteration of a loop and jumps directly to the next iteration?",
+      options: ["break", "continue", "return", "exit"],
+      correctOption: 1,
       points: 2.5
     },
     {
       id: "mcq-16",
       testId: "demo-java-test",
-      question: "Which statement is true about an `interface` in Java?",
-      options: [
-        "An interface can be instantiated directly using new",
-        "A class can implement multiple interfaces",
-        "An interface can have constructors",
-        "All methods in an interface must be private"
-      ],
-      correctOption: 1,
+      question: "Which return type is used when a Java function/method does not return any value?",
+      options: ["null", "empty", "void", "int"],
+      correctOption: 2,
       points: 2.5
     },
     {
       id: "mcq-17",
       testId: "demo-java-test",
-      question: "What is the return type of the `hashCode()` method in `java.lang.Object`?",
-      options: [
-        "long",
-        "String",
-        "int",
-        "void"
-      ],
-      correctOption: 2,
+      question: "What will be the output of the following method overloading code?\nclass Test {\n    static void printVal(int x) { System.out.println(\"int: \" + x); }\n    static void printVal(double x) { System.out.println(\"double: \" + x); }\n    public static void main(String[] args) {\n        printVal('A');\n    }\n}",
+      options: ["int: 65", "double: 65.0", "char: A", "Compilation Error"],
+      correctOption: 0,
       points: 2.5
     },
     {
       id: "mcq-18",
       testId: "demo-java-test",
-      question: "Which keyword is used inside a subclass constructor to invoke the parent class constructor?",
-      options: [
-        "this()",
-        "parent()",
-        "super()",
-        "base()"
-      ],
-      correctOption: 2,
+      question: "What will be the output of this function call?\nstatic int calc(int a, int b) {\n    return a * 2 + b;\n}\npublic static void main(String[] args) {\n    System.out.println(calc(3, 4));\n}",
+      options: ["14", "10", "11", "7"],
+      correctOption: 1,
       points: 2.5
     },
     {
       id: "mcq-19",
       testId: "demo-java-test",
-      question: "What will be printed by:\nint[] arr = {2, 4, 6, 8};\nSystem.out.println(arr.length);",
-      options: [
-        "3",
-        "4",
-        "8",
-        "Compilation Error"
-      ],
-      correctOption: 1,
+      question: "What is the output of:\nint x = 10;\nSystem.out.println(x++ + ++x);",
+      options: ["20", "21", "22", "23"],
+      correctOption: 2,
       points: 2.5
     },
     {
       id: "mcq-20",
       testId: "demo-java-test",
-      question: "Which package is automatically imported into every Java source file?",
-      options: [
-        "java.util",
-        "java.io",
-        "java.lang",
-        "java.net"
-      ],
-      correctOption: 2,
+      question: "What is the output of the following function code?\nstatic void change(int x) {\n    x = x + 10;\n}\npublic static void main(String[] args) {\n    int num = 5;\n    change(num);\n    System.out.println(num);\n}",
+      options: ["5", "15", "10", "Compilation Error"],
+      correctOption: 0,
       points: 2.5
     }
   ],
@@ -292,28 +212,12 @@ const initialData = {
       sampleOutput: "Welcome Rahul",
       starterCode: "import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Read name using sc and print: Welcome <name>\n        \n    }\n}",
       testCases: [
-        {
-          input: "Rahul",
-          output: "Welcome Rahul",
-          isHidden: false
-        },
-        {
-          input: "Amit",
-          output: "Welcome Amit",
-          isHidden: false
-        },
-        {
-          input: "John Doe",
-          output: "Welcome John Doe",
-          isHidden: true
-        },
-        {
-          input: "Priya Sharma",
-          output: "Welcome Priya Sharma",
-          isHidden: true
-        }
+        { input: "Rahul", output: "Welcome Rahul", isHidden: false },
+        { input: "Amit", output: "Welcome Amit", isHidden: false },
+        { input: "John Doe", output: "Welcome John Doe", isHidden: true },
+        { input: "Priya Sharma", output: "Welcome Priya Sharma", isHidden: true }
       ],
-      points: 10
+      points: 5
     },
     {
       id: "code-2",
@@ -325,28 +229,12 @@ const initialData = {
       sampleOutput: "Roll No: 101 | Name: Aryan | Marks: 85\nResult: Pass",
       starterCode: "import java.util.Scanner;\n\nclass Student {\n    // Define attributes, constructor, and methods here\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Read inputs, instantiate Student, and call methods\n        \n    }\n}",
       testCases: [
-        {
-          input: "Aryan\n101\n85",
-          output: "Roll No: 101 | Name: Aryan | Marks: 85\nResult: Pass",
-          isHidden: false
-        },
-        {
-          input: "Riya\n102\n35",
-          output: "Roll No: 102 | Name: Riya | Marks: 35\nResult: Fail",
-          isHidden: false
-        },
-        {
-          input: "Kavita\n103\n98",
-          output: "Roll No: 103 | Name: Kavita | Marks: 98\nResult: Pass",
-          isHidden: true
-        },
-        {
-          input: "Suresh\n104\n40",
-          output: "Roll No: 104 | Name: Suresh | Marks: 40\nResult: Pass",
-          isHidden: true
-        }
+        { input: "Aryan\n101\n85", output: "Roll No: 101 | Name: Aryan | Marks: 85\nResult: Pass", isHidden: false },
+        { input: "Riya\n102\n35", output: "Roll No: 102 | Name: Riya | Marks: 35\nResult: Fail", isHidden: false },
+        { input: "Kavita\n103\n98", output: "Roll No: 103 | Name: Kavita | Marks: 98\nResult: Pass", isHidden: true },
+        { input: "Suresh\n104\n40", output: "Roll No: 104 | Name: Suresh | Marks: 40\nResult: Pass", isHidden: true }
       ],
-      points: 10
+      points: 5
     },
     {
       id: "code-3",
@@ -364,7 +252,7 @@ const initialData = {
           isHidden: false
         }
       ],
-      points: 10
+      points: 5
     },
     {
       id: "code-4",
@@ -376,71 +264,136 @@ const initialData = {
       sampleOutput: "Eligible to Vote",
       starterCode: "import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Write conditional logic here\n        \n    }\n}",
       testCases: [
-        {
-          input: "21",
-          output: "Eligible to Vote",
-          isHidden: false
-        },
-        {
-          input: "15",
-          output: "Not Eligible to Vote\nYears left: 3",
-          isHidden: false
-        },
-        {
-          input: "18",
-          output: "Eligible to Vote",
-          isHidden: true
-        },
-        {
-          input: "17",
-          output: "Not Eligible to Vote\nYears left: 1",
-          isHidden: true
-        },
-        {
-          input: "-5",
-          output: "Invalid Age",
-          isHidden: true
-        }
+        { input: "21", output: "Eligible to Vote", isHidden: false },
+        { input: "15", output: "Not Eligible to Vote\nYears left: 3", isHidden: false },
+        { input: "18", output: "Eligible to Vote", isHidden: true },
+        { input: "17", output: "Not Eligible to Vote\nYears left: 1", isHidden: true },
+        { input: "-5", output: "Invalid Age", isHidden: true }
       ],
-      points: 10
+      points: 5
     },
     {
       id: "code-5",
       testId: "demo-java-test",
       title: "Calculate Area of Rectangle (Functions / Methods)",
-      description: "Write a Java program that defines and calls a method to compute the area of a rectangle.\n\nMethod Signature:\nstatic int calculateArea(int length, int breadth)\n\nThe method should take two integer parameters and return their product (length * breadth).\nIn the main method, take length and breadth as input from the user, call calculateArea(), and print the result.\n\nInput Format:\nTwo space-separated integers representing length and breadth.\n\nOutput Format:\nPrint 'Area = <calculated_area>'",
+      description: "Write a Java program that defines and calls a method to compute the area of a rectangle.\n\nFormula:\nArea = length * breadth\n\nExample:\nIf length = 10 and breadth = 5, Area = 10 * 5 = 50 -> Print: Area = 50\n\nMethod Signature:\nstatic int calculateArea(int length, int breadth)\n\nInput Format:\nTwo space-separated integers representing length and breadth.\n\nOutput Format:\nPrint 'Area = <calculated_area>'",
       constraints: "1 <= length, breadth <= 10^4",
       sampleInput: "10 5",
       sampleOutput: "Area = 50",
       starterCode: "import java.util.Scanner;\n\npublic class Main {\n    // Define static int calculateArea(int length, int breadth) here\n    \n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        int length = sc.nextInt();\n        int breadth = sc.nextInt();\n        \n        // Call calculateArea and print result\n    }\n}",
       testCases: [
+        { input: "10 5", output: "Area = 50", isHidden: false },
+        { input: "7 8", output: "Area = 56", isHidden: false },
+        { input: "15 20", output: "Area = 300", isHidden: true },
+        { input: "1 1", output: "Area = 1", isHidden: true },
+        { input: "120 45", output: "Area = 5400", isHidden: true }
+      ],
+      points: 5
+    },
+    {
+      id: "code-6",
+      testId: "demo-java-test",
+      title: "Find Factorial of a Number (Loops & Math)",
+      description: "Write a Java program to calculate the factorial of a non-negative integer n.\n\nFormula:\nn! = 1 * 2 * 3 * ... * n\nSpecial case: 0! = 1\n\nExamples:\n- For n = 5: 5! = 1 * 2 * 3 * 4 * 5 = 120 -> Output: Factorial = 120\n- For n = 0: 0! = 1 -> Output: Factorial = 1\n\nInput Format:\nA single non-negative integer n.\n\nOutput Format:\nPrint 'Factorial = <result>'",
+      constraints: "0 <= n <= 12",
+      sampleInput: "5",
+      sampleOutput: "Factorial = 120",
+      starterCode: "import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        int n = sc.nextInt();\n        // Calculate factorial of n and print: Factorial = <result>\n        \n    }\n}",
+      testCases: [
+        { input: "5", output: "Factorial = 120", isHidden: false },
+        { input: "0", output: "Factorial = 1", isHidden: false },
+        { input: "1", output: "Factorial = 1", isHidden: true },
+        { input: "7", output: "Factorial = 5040", isHidden: true },
+        { input: "10", output: "Factorial = 3628800", isHidden: true }
+      ],
+      points: 5
+    },
+    {
+      id: "code-7",
+      testId: "demo-java-test",
+      title: "Sum of Fibonacci Series (Loops & Math)",
+      description: "Write a Java program to find the sum of the first n terms of the Fibonacci series.\n\nFormula:\nFibonacci series starts with 0 and 1. Every next term is the sum of the previous two terms:\nTerm 1 = 0, Term 2 = 1, Term k = Term(k-1) + Term(k-2)\nSeries: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, ...\nSum = Term 1 + Term 2 + ... + Term n\n\nExamples:\n- For n = 5: First 5 terms are 0, 1, 1, 2, 3 -> Sum = 0 + 1 + 1 + 2 + 3 = 7 -> Output: Sum = 7\n- For n = 6: First 6 terms are 0, 1, 1, 2, 3, 5 -> Sum = 12 -> Output: Sum = 12\n- For n = 1: First 1 term is 0 -> Sum = 0 -> Output: Sum = 0\n\nInput Format:\nA single integer n representing the number of terms.\n\nOutput Format:\nPrint 'Sum = <total_sum>'",
+      constraints: "1 <= n <= 30",
+      sampleInput: "5",
+      sampleOutput: "Sum = 7",
+      starterCode: "import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        int n = sc.nextInt();\n        // Compute sum of first n Fibonacci terms and print: Sum = <total_sum>\n        \n    }\n}",
+      testCases: [
+        { input: "5", output: "Sum = 7", isHidden: false },
+        { input: "6", output: "Sum = 12", isHidden: false },
+        { input: "1", output: "Sum = 0", isHidden: true },
+        { input: "2", output: "Sum = 1", isHidden: true },
+        { input: "10", output: "Sum = 88", isHidden: true }
+      ],
+      points: 5
+    },
+    {
+      id: "code-8",
+      testId: "demo-java-test",
+      title: "Pythagoras Theorem Hypotenuse (Functions & Math)",
+      description: "Write a Java program that defines a function to calculate the hypotenuse of a right-angled triangle using the Pythagoras Theorem.\n\nFormula:\nc = sqrt(a^2 + b^2) = Math.sqrt(a * a + b * b)\nwhere a is base, b is perpendicular, and c is hypotenuse.\n\nExamples:\n- If a = 3 and b = 4: c = sqrt(3^2 + 4^2) = sqrt(9 + 16) = sqrt(25) = 5.00 -> Output: Hypotenuse = 5.00\n- If a = 5 and b = 12: c = sqrt(25 + 144) = sqrt(169) = 13.00 -> Output: Hypotenuse = 13.00\n\nMethod Signature:\nstatic double calculateHypotenuse(double a, double b)\n\nInput Format:\nTwo space-separated numbers a and b.\n\nOutput Format:\nPrint 'Hypotenuse = <value>' formatted to 2 decimal places (use System.out.printf(\"Hypotenuse = %.2f\", result);).",
+      constraints: "1 <= a, b <= 1000",
+      sampleInput: "3 4",
+      sampleOutput: "Hypotenuse = 5.00",
+      starterCode: "import java.util.Scanner;\n\npublic class Main {\n    // Define static double calculateHypotenuse(double a, double b) here\n    \n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        double a = sc.nextDouble();\n        double b = sc.nextDouble();\n        // Call calculateHypotenuse(a, b) and print using printf(\"Hypotenuse = %.2f\", ans)\n        \n    }\n}",
+      testCases: [
+        { input: "3 4", output: "Hypotenuse = 5.00", isHidden: false },
+        { input: "5 12", output: "Hypotenuse = 13.00", isHidden: false },
+        { input: "8 15", output: "Hypotenuse = 17.00", isHidden: true },
+        { input: "1 1", output: "Hypotenuse = 1.41", isHidden: true },
+        { input: "6 8", output: "Hypotenuse = 10.00", isHidden: true }
+      ],
+      points: 5
+    },
+    {
+      id: "code-9",
+      testId: "demo-java-test",
+      title: "Driving Licence Eligibility Checker (Loop & Nested If-Else)",
+      description: "Write a Java program that checks Driving Licence eligibility for N applicants using a loop and nested if-else conditions.\n\nFor each applicant, you are given two integers: age and hasLearner (1 if they already hold a Learner's Licence, 0 if not).\n\nNested Eligibility Rules:\n- Outer Check: If age >= 18:\n    - Inner Check: If hasLearner == 1 -> Print 'Eligible for Driving Licence'\n    - Else (hasLearner == 0) -> Print 'Apply for Learner Licence First'\n- Else (age < 18):\n    - Inner Check: If age >= 16 -> Print 'Eligible for Gearless Two-Wheeler Only'\n    - Else (age < 16) -> Print 'Not Eligible (Underage)'\n\nExample:\nInput:\n3\n20 1\n22 0\n15 0\nOutput:\nEligible for Driving Licence\nApply for Learner Licence First\nNot Eligible (Underage)\n\nInput Format:\nLine 1: Integer N (number of applicants)\nNext N lines: Two space-separated integers: age and hasLearner (0 or 1)\n\nOutput Format:\nN lines, each printing the eligibility message for that applicant.",
+      constraints: "1 <= N <= 20\n1 <= age <= 100\nhasLearner is 0 or 1",
+      sampleInput: "3\n20 1\n22 0\n15 0",
+      sampleOutput: "Eligible for Driving Licence\nApply for Learner Licence First\nNot Eligible (Underage)",
+      starterCode: "import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        int n = sc.nextInt();\n        // Loop n times and use nested if-else for each applicant\n        \n    }\n}",
+      testCases: [
         {
-          input: "10 5",
-          output: "Area = 50",
+          input: "3\n20 1\n22 0\n15 0",
+          output: "Eligible for Driving Licence\nApply for Learner Licence First\nNot Eligible (Underage)",
           isHidden: false
         },
         {
-          input: "7 8",
-          output: "Area = 56",
+          input: "2\n17 0\n18 1",
+          output: "Eligible for Gearless Two-Wheeler Only\nEligible for Driving Licence",
           isHidden: false
         },
         {
-          input: "15 20",
-          output: "Area = 300",
+          input: "2\n16 1\n25 0",
+          output: "Eligible for Gearless Two-Wheeler Only\nApply for Learner Licence First",
           isHidden: true
         },
         {
-          input: "1 1",
-          output: "Area = 1",
-          isHidden: true
-        },
-        {
-          input: "120 45",
-          output: "Area = 5400",
+          input: "1\n14 1",
+          output: "Not Eligible (Underage)",
           isHidden: true
         }
       ],
-      points: 10
+      points: 5
+    },
+    {
+      id: "code-10",
+      testId: "demo-java-test",
+      title: "Circle Class with Methods and Objects (OOPs & Math)",
+      description: "Write an Object-Oriented Java program by creating a 'Circle' class with methods and creating an object in main().\n\nFormulas (Use PI = 3.14):\n- Area = 3.14 * radius * radius\n- Circumference = 2 * 3.14 * radius\n\nExamples:\n- If radius = 5:\n  Area = 3.14 * 5 * 5 = 78.50\n  Circumference = 2 * 3.14 * 5 = 31.40\n- If radius = 10:\n  Area = 3.14 * 10 * 10 = 314.00\n  Circumference = 2 * 3.14 * 10 = 62.80\n\nClass Requirements:\nCreate class Circle with:\n1. Field: double radius\n2. Constructor: Circle(double radius)\n3. Method: double getArea() -> returns 3.14 * radius * radius\n4. Method: double getCircumference() -> returns 2 * 3.14 * radius\n\nIn Main.main():\n- Read radius (double) from input.\n- Create a Circle object: Circle c = new Circle(radius);\n- Print Area and Circumference formatted to 2 decimal places:\n  Line 1: Area = <area>\n  Line 2: Circumference = <circumference>\n\nInput Format:\nA single number representing the radius r.\n\nOutput Format:\nArea = <area to 2 decimal places>\nCircumference = <circumference to 2 decimal places>",
+      constraints: "1 <= radius <= 1000",
+      sampleInput: "5",
+      sampleOutput: "Area = 78.50\nCircumference = 31.40",
+      starterCode: "import java.util.Scanner;\n\nclass Circle {\n    // Define radius field, constructor, getArea(), and getCircumference()\n}\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        double r = sc.nextDouble();\n        // Create Circle object and print Area & Circumference using printf(\"%.2f\")\n        \n    }\n}",
+      testCases: [
+        { input: "5", output: "Area = 78.50\nCircumference = 31.40", isHidden: false },
+        { input: "10", output: "Area = 314.00\nCircumference = 62.80", isHidden: false },
+        { input: "1", output: "Area = 3.14\nCircumference = 6.28", isHidden: true },
+        { input: "7", output: "Area = 153.86\nCircumference = 43.96", isHidden: true },
+        { input: "4", output: "Area = 50.24\nCircumference = 25.12", isHidden: true }
+      ],
+      points: 5
     }
   ],
   sessions: {},
