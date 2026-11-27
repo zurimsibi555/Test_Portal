@@ -42,9 +42,9 @@ export default function Home() {
                   description:
                     'Official Core Java, OOPs concepts, and Problem Solving examination.',
                   durationMinutes: 45,
-                  scheduledStartTime: '2026-11-27T00:00:00+05:30',
-                  entryWindowMinutes: 10080,
-                  alwaysOpen: true,
+                  scheduledStartTime: '2026-11-28T13:00:00+05:30',
+                  entryWindowMinutes: 30,
+                  alwaysOpen: false,
                 },
               ];
         setTests(loadedTests);
@@ -75,9 +75,9 @@ export default function Home() {
     title: 'Java Foundation Test',
     description: 'Official Core Java, OOPs concepts, and Problem Solving examination.',
     durationMinutes: 45,
-    scheduledStartTime: '2026-11-27T00:00:00+05:30',
-    entryWindowMinutes: 10080,
-    alwaysOpen: true,
+    scheduledStartTime: '2026-11-28T13:00:00+05:30',
+    entryWindowMinutes: 30,
+    alwaysOpen: false,
   };
 
   const schedule = getExamScheduleStatus(primaryTest, nowMs);

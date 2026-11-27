@@ -7,9 +7,9 @@
       "durationMinutes": 45,
       "isActive": true,
       "createdAt": "2026-11-25T09:12:44.388Z",
-      "scheduledStartTime": "2026-11-27T00:00:00+05:30",
-      "entryWindowMinutes": 10080,
-      "alwaysOpen": true
+      "scheduledStartTime": "2026-11-28T13:00:00+05:30",
+      "entryWindowMinutes": 30,
+      "alwaysOpen": false
     }
   ],
   "mcqQuestions": [

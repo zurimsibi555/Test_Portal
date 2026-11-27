@@ -1026,7 +1026,7 @@ export default function AdminPage() {
                       </button>
                     </div>
                     <div className="text-stone-600">
-                      Starts: <strong className="font-mono">{t.scheduledStartTime || '2026-11-27T00:00:00+05:30'}</strong>
+                      Starts: <strong className="font-mono">{t.scheduledStartTime || '2026-11-28T13:00:00+05:30'}</strong>
                     </div>
                     <div className="text-stone-600">
                       Entry Window: <strong>{t.alwaysOpen ? 'Always Open (Testing)' : `${t.entryWindowMinutes || 30} minutes`}</strong> &bull; Duration: <strong>{t.durationMinutes} mins</strong>

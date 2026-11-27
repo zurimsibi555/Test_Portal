@@ -12,9 +12,9 @@ const initialData = {
       title: "Java Foundation Test",
       description: "Comprehensive evaluation covering Input/Output, Conditionals, Switch Cases, Loops, Functions, and OOPs concepts.",
       durationMinutes: 45,
-      scheduledStartTime: "2026-11-27T00:00:00+05:30",
-      entryWindowMinutes: 10080,
-      alwaysOpen: true,
+      scheduledStartTime: "2026-11-28T13:00:00+05:30",
+      entryWindowMinutes: 30,
+      alwaysOpen: false,
       isActive: true,
       createdAt: "2026-11-25T09:12:44.388Z"
     }
