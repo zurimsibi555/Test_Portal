@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getStore, saveStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
+import { verifyAdmin } from '@/lib/adminAuth';
 
 export async function POST(req) {
   try {
+    if (!verifyAdmin(req)) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
     const body = await req.json();
     const {
       test_id,

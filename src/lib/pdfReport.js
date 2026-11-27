@@ -273,3 +273,21 @@ export function getSavedSubmissionPdf(submissionId) {
   }
   return null;
 }
+
+export function deleteSubmissionPdf(submissionId) {
+  const safeId = String(submissionId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!safeId) return;
+  const filePath = path.join(REPORTS_DIR, `${safeId}.pdf`);
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+}
+
+export function clearAllSubmissionPdfs() {
+  if (!fs.existsSync(REPORTS_DIR)) return;
+  for (const file of fs.readdirSync(REPORTS_DIR)) {
+    if (file.endsWith('.pdf')) {
+      fs.unlinkSync(path.join(REPORTS_DIR, file));
+    }
+  }
+}

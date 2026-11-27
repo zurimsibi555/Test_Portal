@@ -2,12 +2,9 @@ import { NextResponse } from 'next/server';
 import { getStore, saveStore } from '@/lib/store';
 import { listActiveLiveFeeds, requestSessionTermination } from '@/lib/liveMonitor';
 import { saveSubmissionPdf } from '@/lib/pdfReport';
+import { verifyAdmin } from '@/lib/adminAuth';
 
-function verifyAdmin(req) {
-  const adminSecret = req.headers.get('x-admin-secret') || req.cookies.get('admin_secret')?.value;
-  const configuredSecret = process.env.ADMIN_SECRET_KEY || 'teacher123';
-  return adminSecret === configuredSecret;
-}
+export const dynamic = 'force-dynamic';
 
 export async function GET(req) {
   try {
@@ -15,12 +12,31 @@ export async function GET(req) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    const feeds = listActiveLiveFeeds(45000); // active within last 45s (lightweight for free tier)
-    return NextResponse.json({
-      success: true,
-      feeds,
-      serverTime: new Date().toISOString(),
+    const { searchParams } = new URL(req.url);
+    const listeningSessionId = searchParams.get('listeningSessionId') || null;
+    const afterAudioSeq = Number(searchParams.get('afterAudioSeq') || 0);
+    const frameSeqsRaw = searchParams.get('frameSeqs') || '';
+    const knownFrameSeqs = {};
+    if (frameSeqsRaw) {
+      for (const pair of frameSeqsRaw.split(',')) {
+        const [sid, seq] = pair.split(':');
+        if (sid && seq) knownFrameSeqs[sid] = Number(seq) || 0;
+      }
+    }
+
+    const feeds = listActiveLiveFeeds(45000, {
+      listeningSessionId,
+      afterAudioSeq,
+      knownFrameSeqs,
     });
+    return NextResponse.json(
+      {
+        success: true,
+        feeds,
+        serverTime: new Date().toISOString(),
+      },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
   } catch (error) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }

@@ -7,8 +7,9 @@
       "durationMinutes": 45,
       "isActive": true,
       "createdAt": "2026-11-25T09:12:44.388Z",
-      "scheduledStartTime": "2026-11-28T13:00:00+05:30",
-      "entryWindowMinutes": 30
+      "scheduledStartTime": "2026-11-27T00:00:00+05:30",
+      "entryWindowMinutes": 10080,
+      "alwaysOpen": true
     }
   ],
   "mcqQuestions": [
@@ -436,81 +437,11 @@
     }
   ],
   "sessions": {
-    "009f408efbdaa095": {
-      "id": "009f408efbdaa095",
+    "026981fbff69750a": {
+      "id": "026981fbff69750a",
       "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "23122",
-      "paired": false,
-      "pairedAt": null,
-      "startTime": null,
-      "durationSeconds": 2700,
-      "remainingSeconds": 2700,
-      "isStarted": false,
-      "isSubmitted": true,
-      "violated": true,
-      "violationReason": "Fullscreen mode was exited by student",
-      "createdAt": "2026-11-25T10:10:25.741Z",
-      "webcamWarnings": 2,
-      "lastWebcamWarningAt": "2026-11-25T10:10:53.277Z",
-      "lastWebcamWarningReason": "Webcam permission not granted or camera disconnected"
-    },
-    "087460663160d3a6": {
-      "id": "087460663160d3a6",
-      "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "324123",
-      "paired": false,
-      "pairedAt": null,
-      "startTime": null,
-      "durationSeconds": 2700,
-      "remainingSeconds": 2700,
-      "isStarted": false,
-      "isSubmitted": true,
-      "violated": true,
-      "violationReason": "Focus lost: Student switched application or window",
-      "createdAt": "2026-11-25T10:18:36.537Z",
-      "webcamWarnings": 2,
-      "lastWebcamWarningAt": "2026-11-25T10:18:40.965Z",
-      "lastWebcamWarningReason": "Webcam permission not granted or camera disconnected"
-    },
-    "0afe07f6c809812b": {
-      "id": "0afe07f6c809812b",
-      "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "12345",
-      "paired": false,
-      "pairedAt": null,
-      "startTime": null,
-      "durationSeconds": 2700,
-      "remainingSeconds": 2700,
-      "isStarted": false,
-      "isSubmitted": true,
-      "violated": true,
-      "violationReason": "Focus lost: Student switched application or window",
-      "createdAt": "2026-11-25T14:05:25.834Z"
-    },
-    "46971d6a7611e555": {
-      "id": "46971d6a7611e555",
-      "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "54321",
-      "paired": false,
-      "pairedAt": null,
-      "startTime": null,
-      "durationSeconds": 2700,
-      "remainingSeconds": 2700,
-      "isStarted": false,
-      "isSubmitted": true,
-      "violated": true,
-      "violationReason": "Fullscreen mode was exited by student",
-      "createdAt": "2026-11-25T14:40:59.198Z"
-    },
-    "48ccb76aa7af457f": {
-      "id": "48ccb76aa7af457f",
-      "testId": "demo-java-test",
-      "studentName": "Verification Student",
-      "rollNo": "TEST-VERIFY-001",
+      "studentName": "sumit ku",
+      "rollNo": "12455",
       "paired": false,
       "pairedAt": null,
       "startTime": null,
@@ -520,220 +451,408 @@
       "isSubmitted": true,
       "violated": false,
       "violationReason": null,
-      "createdAt": "2026-11-25T16:27:12.637Z"
-    },
-    "976e9479cb2d1690": {
-      "id": "976e9479cb2d1690",
-      "testId": "demo-java-test",
-      "studentName": "sumit ",
-      "rollNo": "12345",
-      "paired": false,
-      "pairedAt": null,
-      "startTime": null,
-      "durationSeconds": 2700,
-      "remainingSeconds": 2700,
-      "isStarted": false,
-      "isSubmitted": true,
-      "violated": true,
-      "violationReason": "Fullscreen mode was exited by student",
-      "createdAt": "2026-11-27T08:34:48.375Z"
-    },
-    "9910218cf089e0e2": {
-      "id": "9910218cf089e0e2",
-      "testId": "demo-java-test",
-      "studentName": "sumit ",
-      "rollNo": "6261",
-      "paired": false,
-      "pairedAt": null,
-      "startTime": null,
-      "durationSeconds": 2700,
-      "remainingSeconds": 2700,
-      "isStarted": false,
-      "isSubmitted": true,
-      "violated": true,
-      "violationReason": "Fullscreen mode was exited by student",
-      "createdAt": "2026-11-27T08:35:26.747Z"
+      "createdAt": "2026-11-27T12:10:46.857Z",
+      "camGranted": true,
+      "micGranted": true,
+      "lastMonitorAt": "2026-11-27T12:12:09.382Z"
     }
   },
   "submissions": [
     {
-      "id": "sub_1795601454223",
-      "sessionId": "009f408efbdaa095",
+      "id": "sub_1795781616463",
+      "sessionId": "026981fbff69750a",
       "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "23122",
-      "violated": true,
-      "violationReason": "Fullscreen mode was exited by student",
-      "webcamWarnings": 2,
-      "submittedAt": "2026-11-25T10:10:54.223Z",
-      "score": 0,
-      "status": "DISQUALIFIED / AUTO_SUBMITTED"
-    },
-    {
-      "id": "sub_1795601457390",
-      "sessionId": "009f408efbdaa095",
-      "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "23122",
-      "violated": true,
-      "violationReason": "Fullscreen mode was exited by student",
-      "webcamWarnings": 2,
-      "submittedAt": "2026-11-25T10:10:57.390Z",
-      "score": 0,
-      "status": "DISQUALIFIED / AUTO_SUBMITTED"
-    },
-    {
-      "id": "sub_1795601457444",
-      "sessionId": "009f408efbdaa095",
-      "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "23122",
-      "violated": true,
-      "violationReason": "Fullscreen mode was exited by student",
-      "webcamWarnings": 2,
-      "submittedAt": "2026-11-25T10:10:57.444Z",
-      "score": 0,
-      "status": "DISQUALIFIED / AUTO_SUBMITTED"
-    },
-    {
-      "id": "sub_1795601982272",
-      "sessionId": "087460663160d3a6",
-      "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "324123",
+      "testTitle": "Java Foundation Test",
+      "studentName": "sumit ku",
+      "rollNo": "12455",
       "violated": false,
       "violationReason": null,
-      "submittedAt": "2026-11-25T10:19:42.272Z",
-      "mcqScore": 2,
+      "submittedAt": "2026-11-27T12:13:36.463Z",
+      "mcqScore": 7.5,
+      "mcqMaxScore": 50,
       "codeScore": 0,
-      "totalScore": 2,
-      "webcamWarnings": 2,
-      "status": "COMPLETED"
-    },
-    {
-      "id": "sub_1795601982401",
-      "sessionId": "087460663160d3a6",
-      "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "324123",
-      "violated": true,
-      "violationReason": "Focus lost: Student switched application or window",
-      "webcamWarnings": 2,
-      "submittedAt": "2026-11-25T10:19:42.401Z",
-      "score": 0,
-      "status": "DISQUALIFIED / AUTO_SUBMITTED"
-    },
-    {
-      "id": "sub_1795615792509",
-      "sessionId": "0afe07f6c809812b",
-      "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "12345",
-      "violated": true,
-      "violationReason": "Focus lost: Student switched application or window",
+      "codeMaxScore": 50,
+      "totalScore": 7.5,
+      "totalMaxScore": 100,
       "webcamWarnings": 0,
-      "submittedAt": "2026-11-25T14:09:52.509Z",
-      "score": 0,
-      "status": "DISQUALIFIED / AUTO_SUBMITTED"
-    },
-    {
-      "id": "sub_1795615792603",
-      "sessionId": "0afe07f6c809812b",
-      "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "12345",
-      "violated": false,
-      "violationReason": null,
-      "submittedAt": "2026-11-25T14:09:52.603Z",
-      "mcqScore": 2,
-      "codeScore": 0,
-      "totalScore": 2,
-      "webcamWarnings": 0,
-      "status": "COMPLETED"
-    },
-    {
-      "id": "sub_1795618588693",
-      "sessionId": "46971d6a7611e555",
-      "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "54321",
-      "violated": false,
-      "violationReason": null,
-      "submittedAt": "2026-11-25T14:56:28.693Z",
-      "mcqScore": 2,
-      "codeScore": 0,
-      "totalScore": 2,
-      "webcamWarnings": 0,
-      "status": "COMPLETED"
-    },
-    {
-      "id": "sub_1795618590125",
-      "sessionId": "46971d6a7611e555",
-      "testId": "demo-java-test",
-      "studentName": "sumit",
-      "rollNo": "54321",
-      "violated": true,
-      "violationReason": "Fullscreen mode was exited by student",
-      "webcamWarnings": 0,
-      "submittedAt": "2026-11-25T14:56:30.125Z",
-      "score": 0,
-      "status": "DISQUALIFIED / AUTO_SUBMITTED"
-    },
-    {
-      "id": "sub_1795624041636",
-      "sessionId": "48ccb76aa7af457f",
-      "testId": "demo-java-test",
-      "studentName": "Verification Student",
-      "rollNo": "TEST-VERIFY-001",
-      "violated": false,
-      "violationReason": null,
-      "submittedAt": "2026-11-25T16:27:21.636Z",
-      "mcqScore": 4,
-      "codeScore": 20,
-      "totalScore": 24,
-      "webcamWarnings": 0,
-      "status": "COMPLETED"
-    },
-    {
-      "id": "sub_1795768505644",
-      "sessionId": "976e9479cb2d1690",
-      "testId": "demo-java-test",
-      "studentName": "sumit ",
-      "rollNo": "12345",
-      "violated": true,
-      "violationReason": "Fullscreen mode was exited by student",
-      "webcamWarnings": 0,
-      "submittedAt": "2026-11-27T08:35:05.644Z",
-      "score": 0,
-      "status": "DISQUALIFIED / AUTO_SUBMITTED"
-    },
-    {
-      "id": "sub_1795768618944",
-      "sessionId": "9910218cf089e0e2",
-      "testId": "demo-java-test",
-      "studentName": "sumit ",
-      "rollNo": "6261",
-      "violated": false,
-      "violationReason": null,
-      "submittedAt": "2026-11-27T08:36:58.944Z",
-      "mcqScore": 0,
-      "codeScore": 10,
-      "totalScore": 10,
-      "webcamWarnings": 0,
-      "status": "COMPLETED"
-    },
-    {
-      "id": "sub_1795768619035",
-      "sessionId": "9910218cf089e0e2",
-      "testId": "demo-java-test",
-      "studentName": "sumit ",
-      "rollNo": "6261",
-      "violated": true,
-      "violationReason": "Fullscreen mode was exited by student",
-      "webcamWarnings": 0,
-      "submittedAt": "2026-11-27T08:36:59.035Z",
-      "score": 0,
-      "status": "DISQUALIFIED / AUTO_SUBMITTED"
+      "status": "COMPLETED",
+      "mcqDetails": [
+        {
+          "questionId": "mcq-1",
+          "questionNumber": 1,
+          "question": "What will be the output of the following Java statement?\nSystem.out.println(10 + 20 + \"Java\" + 10 + 20);",
+          "options": [
+            "60Java",
+            "30Java1020",
+            "30Java30",
+            "1020Java1020"
+          ],
+          "selectedOption": 3,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-2",
+          "questionNumber": 2,
+          "question": "What is the output of the following conditional statement snippet?\nint a = 5, b = 10;\nif (a > 0 || ++b > 10) {\n    System.out.println(a + \" \" + b);\n}",
+          "options": [
+            "5 11",
+            "5 10",
+            "6 11",
+            "Compilation Error"
+          ],
+          "selectedOption": 1,
+          "correctOption": 1,
+          "isCorrect": true,
+          "marksAwarded": 2.5,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-3",
+          "questionNumber": 3,
+          "question": "What will be printed by the following loop with jump statements?\nint sum = 0;\nfor (int i = 1; i <= 5; i++) {\n    if (i == 3) continue;\n    if (i == 5) break;\n    sum += i;\n}\nSystem.out.println(sum);",
+          "options": [
+            "15",
+            "7",
+            "3",
+            "10"
+          ],
+          "selectedOption": 2,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-4",
+          "questionNumber": 4,
+          "question": "What will be the output of the following method overloading code?\nclass Test {\n    static void printVal(int x) { System.out.println(\"int: \" + x); }\n    static void printVal(double x) { System.out.println(\"double: \" + x); }\n    public static void main(String[] args) {\n        printVal('A');\n    }\n}",
+          "options": [
+            "int: 65",
+            "double: 65.0",
+            "char: A",
+            "Compilation Error"
+          ],
+          "selectedOption": 3,
+          "correctOption": 0,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-5",
+          "questionNumber": 5,
+          "question": "What will be printed when a Child object is created?\nclass Parent {\n    Parent() { System.out.print(\"Base \"); }\n}\nclass Child extends Parent {\n    Child() { System.out.print(\"Derived \"); }\n}\npublic class Main {\n    public static void main(String[] args) {\n        new Child();\n    }\n}",
+          "options": [
+            "Derived Base ",
+            "Base Derived ",
+            "Derived ",
+            "Base "
+          ],
+          "selectedOption": 0,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-6",
+          "questionNumber": 6,
+          "question": "Which OOPs concept binds data members and member functions into a single unit and hides direct access using private access modifiers?",
+          "options": [
+            "Polymorphism",
+            "Encapsulation",
+            "Inheritance",
+            "Abstraction"
+          ],
+          "selectedOption": 0,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-7",
+          "questionNumber": 7,
+          "question": "What is the size of a `char` data type in Java?",
+          "options": [
+            "1 byte",
+            "2 bytes",
+            "4 bytes",
+            "8 bytes"
+          ],
+          "selectedOption": 2,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-8",
+          "questionNumber": 8,
+          "question": "Which keyword is used to prevent a class from being inherited in Java?",
+          "options": [
+            "static",
+            "abstract",
+            "final",
+            "const"
+          ],
+          "selectedOption": 3,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-9",
+          "questionNumber": 9,
+          "question": "What will be the output of:\nString s1 = new String(\"Java\");\nString s2 = new String(\"Java\");\nSystem.out.println(s1 == s2);",
+          "options": [
+            "true",
+            "false",
+            "Compilation Error",
+            "Runtime Exception"
+          ],
+          "selectedOption": 1,
+          "correctOption": 1,
+          "isCorrect": true,
+          "marksAwarded": 2.5,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-10",
+          "questionNumber": 10,
+          "question": "Which of the following is NOT a valid access modifier in Java?",
+          "options": [
+            "public",
+            "protected",
+            "private",
+            "friend"
+          ],
+          "selectedOption": 3,
+          "correctOption": 3,
+          "isCorrect": true,
+          "marksAwarded": 2.5,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-11",
+          "questionNumber": 11,
+          "question": "What is the default value of an uninitialized `boolean` instance variable in a Java class?",
+          "options": [
+            "true",
+            "false",
+            "null",
+            "0"
+          ],
+          "selectedOption": 3,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-12",
+          "questionNumber": 12,
+          "question": "Which collection class allows duplicate elements and maintains insertion order?",
+          "options": [
+            "HashSet",
+            "TreeSet",
+            "ArrayList",
+            "HashMap"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-13",
+          "questionNumber": 13,
+          "question": "What happens if an exception is thrown inside a `try` block and there is a `finally` block?",
+          "options": [
+            "The finally block is skipped",
+            "The finally block executes only if the exception is caught",
+            "The finally block always executes (unless JVM exits)",
+            "Compilation fails"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-14",
+          "questionNumber": 14,
+          "question": "Which method is used to start a new thread's execution in Java?",
+          "options": [
+            "run()",
+            "start()",
+            "execute()",
+            "begin()"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-15",
+          "questionNumber": 15,
+          "question": "What is the output of:\nint x = 10;\nSystem.out.println(x++ + ++x);",
+          "options": [
+            "20",
+            "21",
+            "22",
+            "23"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-16",
+          "questionNumber": 16,
+          "question": "Which statement is true about an `interface` in Java?",
+          "options": [
+            "An interface can be instantiated directly using new",
+            "A class can implement multiple interfaces",
+            "An interface can have constructors",
+            "All methods in an interface must be private"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-17",
+          "questionNumber": 17,
+          "question": "What is the return type of the `hashCode()` method in `java.lang.Object`?",
+          "options": [
+            "long",
+            "String",
+            "int",
+            "void"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-18",
+          "questionNumber": 18,
+          "question": "Which keyword is used inside a subclass constructor to invoke the parent class constructor?",
+          "options": [
+            "this()",
+            "parent()",
+            "super()",
+            "base()"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-19",
+          "questionNumber": 19,
+          "question": "What will be printed by:\nint[] arr = {2, 4, 6, 8};\nSystem.out.println(arr.length);",
+          "options": [
+            "3",
+            "4",
+            "8",
+            "Compilation Error"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-20",
+          "questionNumber": 20,
+          "question": "Which package is automatically imported into every Java source file?",
+          "options": [
+            "java.util",
+            "java.io",
+            "java.lang",
+            "java.net"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        }
+      ],
+      "codingDetails": [
+        {
+          "questionId": "code-1",
+          "questionNumber": 1,
+          "title": "User Greeting Program (Input / Output)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 4,
+          "marksAwarded": 0,
+          "maxMarks": 10
+        },
+        {
+          "questionId": "code-2",
+          "questionNumber": 2,
+          "title": "Student Class with Methods (OOPs Concepts)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 4,
+          "marksAwarded": 0,
+          "maxMarks": 10
+        },
+        {
+          "questionId": "code-3",
+          "questionNumber": 3,
+          "title": "Print 1 to 50 Except 45 (Loops & Jumps)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 1,
+          "marksAwarded": 0,
+          "maxMarks": 10
+        },
+        {
+          "questionId": "code-4",
+          "questionNumber": 4,
+          "title": "Voting Eligibility Checker (Conditional Statements)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 5,
+          "marksAwarded": 0,
+          "maxMarks": 10
+        },
+        {
+          "questionId": "code-5",
+          "questionNumber": 5,
+          "title": "Calculate Area of Rectangle (Functions / Methods)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 5,
+          "marksAwarded": 0,
+          "maxMarks": 10
+        }
+      ],
+      "sentToStudent": false,
+      "pdfFileName": "Report_12455_sub_1795781616463.pdf",
+      "pdfGeneratedAt": "2026-11-27T12:13:36.747Z"
     }
   ]
 }

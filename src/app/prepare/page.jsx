@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useId, useRef } from 'react';
 import Link from 'next/link';
 import {
   BookOpen,
@@ -16,6 +16,10 @@ import {
   Lightbulb,
   AlertCircle,
   Footprints,
+  Camera,
+  Mic,
+  RefreshCw,
+  ShieldAlert,
 } from 'lucide-react';
 import CodeEditor from '@/components/CodeEditor';
 import WebcamProctor from '@/components/WebcamProctor';
@@ -24,8 +28,16 @@ import McqPracticePanel from '@/components/prepare/McqPracticePanel';
 import { PREPARE_TOPICS } from '@/data/prepareTopics';
 
 export default function PreparePage() {
-  const [prepSessionId, setPrepSessionId] = useState('');
-  const [permStatus, setPermStatus] = useState({ camGranted: false, micGranted: false, error: '' });
+  const reactId = useId();
+  const prepSessionId = `prep_${reactId.replace(/[^a-zA-Z0-9]/g, '')}`;
+  const practiceCounterRef = useRef(0);
+  const [permStatus, setPermStatus] = useState({
+    camGranted: false,
+    micGranted: false,
+    checking: true,
+    error: '',
+  });
+  const [permRetryCount, setPermRetryCount] = useState(0);
   const [activeTabId, setActiveTabId] = useState(PREPARE_TOPICS[0].id); // topic.id | 'mcq-practice'
   const [compilerOpen, setCompilerOpen] = useState(false);
   const [compilerQuestion, setCompilerQuestion] = useState({
@@ -35,18 +47,14 @@ export default function PreparePage() {
     starterCode: PREPARE_TOPICS[0].examples[0].code,
   });
 
-  useEffect(() => {
-    const id = `prep_${Math.random().toString(36).slice(2, 10)}`;
-    setPrepSessionId(id);
-  }, []);
-
   const currentTopicIndex = PREPARE_TOPICS.findIndex((t) => t.id === activeTabId);
   const currentTopic =
     currentTopicIndex >= 0 ? PREPARE_TOPICS[currentTopicIndex] : PREPARE_TOPICS[0];
 
   const handleOpenPractice = (example, idx) => {
+    practiceCounterRef.current += 1;
     setCompilerQuestion({
-      id: `prep_${currentTopic.id}_${idx}_${Date.now()}`,
+      id: `prep_${currentTopic.id}_${idx}_${practiceCounterRef.current}`,
       title: example.title,
       sampleInput: example.sampleInput || '',
       starterCode: example.code,
@@ -55,9 +63,10 @@ export default function PreparePage() {
   };
 
   const handleOpenBlankSandbox = () => {
+    practiceCounterRef.current += 1;
     const fallback = currentTopic.examples?.[0] || PREPARE_TOPICS[0].examples[0];
     setCompilerQuestion({
-      id: `prep_sandbox_${Date.now()}`,
+      id: `prep_sandbox_${practiceCounterRef.current}`,
       title: 'Java Practice Sandbox',
       sampleInput: fallback.sampleInput || '',
       starterCode: fallback.code,
@@ -75,8 +84,87 @@ export default function PreparePage() {
         studentName="Practice Student"
         rollNo="PREPARE-MODE"
         testId="prepare-sandbox"
+        retryTrigger={permRetryCount}
         onPermissionStatus={setPermStatus}
       />
+
+      {/* MANDATORY CAMERA & MICROPHONE GATE IN PREPARE MODE */}
+      {(!permStatus.camGranted || !permStatus.micGranted) && (
+        <div className="fixed inset-0 z-50 bg-stone-900/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white border-2 border-emerald-700 rounded-3xl p-7 shadow-2xl text-center space-y-5">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-9 h-9" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="inline-block px-3 py-1 rounded-full bg-rose-100 text-rose-800 text-[11px] font-black uppercase tracking-wider">
+                Mandatory Proctoring Access
+              </span>
+              <h2 className="text-xl font-black text-stone-900">
+                Camera &amp; Microphone Required
+              </h2>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                {permStatus.checking
+                  ? 'Requesting Camera & Microphone permissions. Please click "Allow" in the browser popup...'
+                  : permStatus.error ||
+                    'You must grant both Camera and Microphone permissions to access Preparation Mode.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 text-xs">
+              <div
+                className={`p-3 rounded-xl border flex items-center justify-center gap-2 font-bold ${
+                  permStatus.camGranted
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                <Camera className="w-4 h-4" />
+                <span>{permStatus.camGranted ? 'Camera Allowed' : 'Camera Required'}</span>
+              </div>
+              <div
+                className={`p-3 rounded-xl border flex items-center justify-center gap-2 font-bold ${
+                  permStatus.micGranted
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                <Mic className="w-4 h-4" />
+                <span>{permStatus.micGranted ? 'Mic Allowed' : 'Mic Required'}</span>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-[#FAF8F5] border border-stone-200 text-[11px] text-stone-600 text-left space-y-1">
+              <div className="font-bold text-stone-800">If you clicked Block/Deny earlier:</div>
+              <p>
+                Click the <strong>Lock / Camera icon</strong> next to the website URL, change{' '}
+                <strong>Camera</strong> &amp; <strong>Microphone</strong> to <strong>Allow</strong>,
+                then click the button below.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={permStatus.checking}
+                onClick={() => setPermRetryCount((c) => c + 1)}
+                className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                <RefreshCw className={`w-4 h-4 ${permStatus.checking ? 'animate-spin' : ''}`} />
+                <span>
+                  {permStatus.checking ? 'Checking Permissions...' : 'Allow Camera & Microphone'}
+                </span>
+              </button>
+              <Link
+                href="/"
+                className="text-xs text-stone-500 hover:text-emerald-700 font-medium py-1"
+              >
+                &larr; Back to Exam Portal
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Clean Top Header */}
       <header className="border-b border-stone-200 bg-white px-4 py-3 sticky top-0 z-20 shadow-xs">
@@ -114,7 +202,9 @@ export default function PreparePage() {
 
             <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FAF8F5] text-stone-600 border border-stone-200 text-[11px] font-medium">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-              <span>{permStatus.camGranted || permStatus.micGranted ? 'Ready' : 'Checking'}</span>
+              <span>
+                {permStatus.camGranted && permStatus.micGranted ? 'Cam & Mic Active' : 'Permission Required'}
+              </span>
             </span>
           </div>
         </div>

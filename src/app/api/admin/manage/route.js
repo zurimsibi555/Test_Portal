@@ -1,24 +1,29 @@
 import { NextResponse } from 'next/server';
 import { getStore, saveStore } from '@/lib/store';
+import { deleteSubmissionPdf, clearAllSubmissionPdfs } from '@/lib/pdfReport';
+import { verifyAdmin } from '@/lib/adminAuth';
 
-// Helper to verify admin token
-function verifyAdmin(req) {
-  const adminSecret = req.headers.get('x-admin-secret') || req.cookies.get('admin_secret')?.value;
-  const configuredSecret = process.env.ADMIN_SECRET_KEY || 'teacher123';
-  return adminSecret === configuredSecret;
-}
+export const dynamic = 'force-dynamic';
 
 export async function GET(req) {
   try {
     const store = getStore();
     const isAdmin = verifyAdmin(req);
-    return NextResponse.json({
-      success: true,
-      tests: store.tests,
-      mcqQuestions: store.mcqQuestions,
-      codingQuestions: store.codingQuestions,
-      submissions: isAdmin ? store.submissions : []
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        isAdmin,
+        tests: store.tests,
+        mcqQuestions: store.mcqQuestions,
+        codingQuestions: store.codingQuestions,
+        submissions: isAdmin ? store.submissions : [],
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+      }
+    );
   } catch (error) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }
@@ -100,7 +105,7 @@ export async function PATCH(req) {
     if (!verifyAdmin(req)) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
-    const { testId, scheduledStartTime, entryWindowMinutes, durationMinutes } = await req.json();
+    const { testId, scheduledStartTime, entryWindowMinutes, durationMinutes, alwaysOpen } = await req.json();
     const store = getStore();
     const test = store.tests.find((t) => t.id === testId);
     if (!test) {
@@ -109,8 +114,46 @@ export async function PATCH(req) {
     if (scheduledStartTime) test.scheduledStartTime = scheduledStartTime;
     if (entryWindowMinutes !== undefined) test.entryWindowMinutes = parseInt(entryWindowMinutes, 10) || 30;
     if (durationMinutes !== undefined) test.durationMinutes = parseInt(durationMinutes, 10) || 45;
+    if (alwaysOpen !== undefined) test.alwaysOpen = Boolean(alwaysOpen);
     saveStore(store);
     return NextResponse.json({ success: true, test });
+  } catch (error) {
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req) {
+  try {
+    if (!verifyAdmin(req)) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const submissionId = searchParams.get('submissionId');
+    const clearAll = searchParams.get('clearAll') === 'true';
+
+    const store = getStore();
+
+    if (clearAll) {
+      store.submissions = [];
+      store.sessions = {};
+      saveStore(store);
+      clearAllSubmissionPdfs();
+      return NextResponse.json({ success: true, message: 'All test reports and sessions cleared.' });
+    }
+
+    if (submissionId) {
+      const target = store.submissions.find((s) => s.id === submissionId);
+      if (!target) {
+        return NextResponse.json({ success: false, message: 'Submission not found' }, { status: 404 });
+      }
+      store.submissions = store.submissions.filter((s) => s.id !== submissionId);
+      saveStore(store);
+      deleteSubmissionPdf(submissionId);
+      return NextResponse.json({ success: true, message: 'Report deleted successfully.' });
+    }
+
+    return NextResponse.json({ success: false, message: 'submissionId or clearAll=true is required' }, { status: 400 });
   } catch (error) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }

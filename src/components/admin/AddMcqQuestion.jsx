@@ -27,10 +27,9 @@ export default function AddMcqQuestion({ testId, onCreated, tests = [] }) {
     setStatus({ type: "", message: "" });
 
     try {
-      const adminKey = typeof window !== "undefined" ? localStorage.getItem("admin_key") || "" : "";
       const res = await fetch("/api/admin/manage", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-secret": adminKey },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "mcq",
           testId: finalTestId,

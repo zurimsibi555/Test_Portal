@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getStore, saveStore } from '@/lib/store';
-import { generateSubmissionPdfBuffer, getSavedSubmissionPdf, saveSubmissionPdf } from '@/lib/pdfReport';
+import { getSavedSubmissionPdf, saveSubmissionPdf } from '@/lib/pdfReport';
+import { verifyAdmin } from '@/lib/adminAuth';
 
-function verifyAdmin(req) {
-  const adminSecret = req.headers.get('x-admin-secret') || req.cookies.get('admin_secret')?.value;
-  const configuredSecret = process.env.ADMIN_SECRET_KEY || 'teacher123';
-  return adminSecret === configuredSecret;
-}
+export const dynamic = 'force-dynamic';
 
 export async function GET(req, { params }) {
   try {

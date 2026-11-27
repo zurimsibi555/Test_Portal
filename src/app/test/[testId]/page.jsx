@@ -20,6 +20,9 @@ import {
   ArrowRight,
   RotateCcw,
   SkipForward,
+  Camera,
+  Mic,
+  RefreshCw,
 } from 'lucide-react';
 import CodeEditor from '@/components/CodeEditor';
 import AntiCheatGuard from '@/components/AntiCheatGuard';
@@ -59,25 +62,76 @@ function TestContent() {
   const [loginError, setLoginError] = useState('');
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [alreadyAttended, setAlreadyAttended] = useState(false);
+  const [preflightPerms, setPreflightPerms] = useState({
+    camGranted: false,
+    micGranted: false,
+    checking: false,
+    error: '',
+  });
+
+  const verifyCamAndMic = useCallback(async () => {
+    setPreflightPerms((prev) => ({ ...prev, checking: true, error: '' }));
+    let tempStream = null;
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Browser does not support Camera/Microphone access.');
+      }
+      tempStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: 'user' },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+      });
+      const vTrack = tempStream.getVideoTracks()[0];
+      const aTrack = tempStream.getAudioTracks()[0];
+      const camOk = Boolean(vTrack && vTrack.readyState === 'live');
+      const micOk = Boolean(aTrack && aTrack.readyState === 'live');
+      if (!camOk || !micOk) {
+        setPreflightPerms({
+          camGranted: camOk,
+          micGranted: micOk,
+          checking: false,
+          error: 'Both Camera and Microphone permissions are strictly required.',
+        });
+        return false;
+      }
+      setPreflightPerms({ camGranted: true, micGranted: true, checking: false, error: '' });
+      return true;
+    } catch (err) {
+      const msg =
+        err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError'
+          ? 'Camera & Microphone permissions denied. Please allow both in browser settings to begin.'
+          : err?.message || 'Camera or Microphone not detected.';
+      setPreflightPerms({ camGranted: false, micGranted: false, checking: false, error: msg });
+      return false;
+    } finally {
+      if (tempStream) {
+        tempStream.getTracks().forEach((t) => t.stop());
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (stage !== 'QR_PAIR') return;
+    const timer = setTimeout(() => {
+      verifyCamAndMic();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [stage, verifyCamAndMic]);
 
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && testId) {
-      if (localStorage.getItem(`exam_completed_${testId}`)) {
-        setAlreadyAttended(true);
-      }
-    }
-  }, [testId]);
-
   // Load test questions
   useEffect(() => {
     async function loadTest() {
       try {
-        const res = await fetch('/api/admin/manage');
+        const res = await fetch('/api/admin/manage', { cache: 'no-store' });
         const data = await res.json();
         if (data.success) {
           const test = data.tests.find((t) => t.id === testId) || data.tests[0];
@@ -85,6 +139,11 @@ function TestContent() {
           const coding = data.codingQuestions.filter((q) => q.testId === test.id);
           setTestData({ ...test, mcqs, coding });
           setRemainingSeconds((test.durationMinutes || 45) * 60);
+          if (typeof window !== 'undefined' && test?.id && !test.alwaysOpen) {
+            if (localStorage.getItem(`exam_completed_${test.id}`)) {
+              setAlreadyAttended(true);
+            }
+          }
         }
       } catch (err) {
         console.error(err);
@@ -140,7 +199,7 @@ function TestContent() {
         }
       }
     },
-    [session?.id, testData?.id]
+    [session, testData]
   );
 
   // Poll for Mobile Pairing & Remote Violations
@@ -169,6 +228,47 @@ function TestContent() {
     return () => clearInterval(pollingRef.current);
   }, [session?.id, isMobilePaired, stage, handleViolation]);
 
+  const handleSubmitTest = useCallback(
+    async (autoReason = null) => {
+      if (!autoReason && !confirm('Are you sure you want to finish and submit the test?')) {
+        return;
+      }
+      if (!session?.id) return;
+
+      try {
+        const res = await fetch(`/api/session/${session.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'submit',
+            mcqAnswers,
+            codingAnswers: codingEvaluations,
+            codingSolutions,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setSubmissionId(data.submissionId || null);
+          if (typeof window !== 'undefined' && testData?.id) {
+            localStorage.setItem(`exam_completed_${testData.id}`, 'SUBMITTED');
+          }
+          setStage('SUBMITTED');
+          if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+          }
+        }
+      } catch (err) {
+        alert(`Submission error: ${err.message}`);
+      }
+    },
+    [session, mcqAnswers, codingEvaluations, codingSolutions, testData]
+  );
+
+  const handleSubmitTestRef = useRef(handleSubmitTest);
+  useEffect(() => {
+    handleSubmitTestRef.current = handleSubmitTest;
+  }, [handleSubmitTest]);
+
   // Timer countdown
   useEffect(() => {
     if (stage !== 'EXAM') return;
@@ -176,7 +276,7 @@ function TestContent() {
       setRemainingSeconds((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          handleSubmitTest('Time expired');
+          handleSubmitTestRef.current('Time expired');
           return 0;
         }
         return prev - 1;
@@ -186,7 +286,10 @@ function TestContent() {
     return () => clearInterval(interval);
   }, [stage]);
 
-  const enterFullscreenAndStart = () => {
+  const enterFullscreenAndStart = async () => {
+    const ok = await verifyCamAndMic();
+    if (!ok) return;
+
     try {
       if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});
@@ -195,38 +298,6 @@ function TestContent() {
       // ignore
     }
     setStage('EXAM');
-  };
-
-  const handleSubmitTest = async (autoReason = null) => {
-    if (!autoReason && !confirm('Are you sure you want to finish and submit the test?')) {
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/session/${session.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'submit',
-          mcqAnswers,
-          codingAnswers: codingEvaluations,
-          codingSolutions,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSubmissionId(data.submissionId || null);
-        if (typeof window !== 'undefined' && testData?.id) {
-          localStorage.setItem(`exam_completed_${testData.id}`, 'SUBMITTED');
-        }
-        setStage('SUBMITTED');
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-        }
-      }
-    } catch (err) {
-      alert(`Submission error: ${err.message}`);
-    }
   };
 
   const formatTimer = (seconds) => {
@@ -248,8 +319,9 @@ function TestContent() {
 
   // Enforce Scheduled Time & 30-Minute Absent Window before entering exam
   const schedule = getExamScheduleStatus(testData, nowMs);
+  const isBlockedAttended = !schedule.alwaysOpen && alreadyAttended;
 
-  if (stage === 'LOGIN' && (schedule.status === 'EXPIRED' || alreadyAttended)) {
+  if (stage === 'LOGIN' && (schedule.status === 'EXPIRED' || isBlockedAttended)) {
     return (
       <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center p-4">
         <div className="max-w-lg w-full bg-white border-2 border-rose-300 rounded-3xl p-8 shadow-xl text-center space-y-5">
@@ -258,11 +330,11 @@ function TestContent() {
           </div>
           <div className="space-y-2">
             <span className="inline-block px-3 py-1 rounded-full bg-rose-100 text-rose-800 text-xs font-black uppercase tracking-wider">
-              {alreadyAttended ? 'Already Attempted' : 'ABSENT — Window Expired'}
+              {isBlockedAttended ? 'Already Attempted' : 'ABSENT — Window Expired'}
             </span>
             <h1 className="text-2xl font-bold text-stone-900">{testData.title}</h1>
             <p className="text-xs text-stone-600 leading-relaxed">
-              {alreadyAttended
+              {isBlockedAttended
                 ? 'You have already attended or submitted this examination. Re-entry is not permitted.'
                 : 'The examination started on Saturday, 28 Nov at 1:00 PM sharp and the 30-minute joining window closed at 1:30 PM. You have been marked Absent and cannot attend it again.'}
             </p>
@@ -440,20 +512,74 @@ function TestContent() {
             )}
           </div>
 
+          {/* Mandatory Camera & Microphone Pre-Check */}
+          <div className="bg-[#FAF8F5] border border-stone-200 rounded-2xl p-4 mb-5 text-left space-y-3 max-w-md mx-auto">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-stone-800 uppercase tracking-wider">
+                Mandatory Device Check
+              </span>
+              <button
+                type="button"
+                onClick={verifyCamAndMic}
+                disabled={preflightPerms.checking}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-stone-300 text-[11px] font-semibold text-stone-700 hover:bg-stone-100 transition"
+              >
+                <RefreshCw className={`w-3 h-3 ${preflightPerms.checking ? 'animate-spin' : ''}`} />
+                <span>{preflightPerms.checking ? 'Checking...' : 'Verify Cam & Mic'}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-bold">
+              <div
+                className={`p-2.5 rounded-xl border flex items-center justify-center gap-1.5 ${
+                  preflightPerms.camGranted
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>{preflightPerms.camGranted ? 'Camera Ready' : 'Camera Required'}</span>
+              </div>
+              <div
+                className={`p-2.5 rounded-xl border flex items-center justify-center gap-1.5 ${
+                  preflightPerms.micGranted
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                <Mic className="w-3.5 h-3.5" />
+                <span>{preflightPerms.micGranted ? 'Mic Ready' : 'Mic Required'}</span>
+              </div>
+            </div>
+
+            {preflightPerms.error && (
+              <p className="text-[11px] text-rose-700 font-medium leading-snug">
+                {preflightPerms.error}
+              </p>
+            )}
+          </div>
+
           <div className="space-y-3">
             <button
               onClick={enterFullscreenAndStart}
-              className={`w-full py-3 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition ${
+              disabled={!preflightPerms.camGranted || !preflightPerms.micGranted || preflightPerms.checking}
+              className={`w-full py-3 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed ${
                 isMobilePaired
                   ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
                   : 'bg-stone-900 hover:bg-stone-800 text-white'
               }`}
             >
               <Maximize2 className="w-4 h-4" />
-              <span>{isMobilePaired ? 'Start Exam in Fullscreen' : 'Enter Fullscreen & Begin Test'}</span>
+              <span>
+                {!preflightPerms.camGranted || !preflightPerms.micGranted
+                  ? 'Allow Camera & Mic to Begin Test'
+                  : isMobilePaired
+                  ? 'Start Exam in Fullscreen'
+                  : 'Enter Fullscreen & Begin Test'}
+              </span>
             </button>
 
-            {!isMobilePaired && (
+            {!isMobilePaired && preflightPerms.camGranted && preflightPerms.micGranted && (
               <button
                 onClick={enterFullscreenAndStart}
                 className="text-xs text-stone-500 hover:text-emerald-700 underline font-medium"

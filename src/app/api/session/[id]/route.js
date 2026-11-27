@@ -53,6 +53,9 @@ export async function POST(req, { params }) {
 
     // 2. Anti-cheat Violation Action (Triggered by either Mobile or Desktop)
     if (action === 'violation') {
+      if (session.isSubmitted) {
+        return NextResponse.json({ success: true, alreadySubmitted: true, message: 'Session already submitted.' });
+      }
       session.violated = true;
       session.violationReason = reason || 'Proctoring violation detected (Tab switch or App blur)';
       session.isSubmitted = true;
@@ -102,6 +105,9 @@ export async function POST(req, { params }) {
 
     // 3. Normal Submission
     if (action === 'submit') {
+      if (session.isSubmitted) {
+        return NextResponse.json({ success: true, submitted: true, alreadySubmitted: true });
+      }
       session.isSubmitted = true;
       const test = store.tests.find((t) => t.id === session.testId);
 

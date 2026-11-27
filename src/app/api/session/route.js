@@ -81,8 +81,10 @@ export async function POST(req) {
     store.sessions[sessionId] = newSession;
     saveStore(store);
 
-    const forwardedHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
-    const forwardedProto = req.headers.get('x-forwarded-proto') || 'https';
+    const rawHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || '';
+    const rawProto = req.headers.get('x-forwarded-proto') || 'https';
+    const forwardedHost = rawHost.split(',')[0].trim();
+    const forwardedProto = rawProto.split(',')[0].trim();
     const derivedOrigin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : null;
     const configuredUrl = process.env.NEXT_PUBLIC_APP_URL;
     const baseUrl =

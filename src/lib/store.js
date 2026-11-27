@@ -12,8 +12,9 @@ const initialData = {
       title: "Java Foundation Test",
       description: "Comprehensive evaluation covering Core Java, Input/Output, Conditionals, Loops, Functions, and OOPs concepts.",
       durationMinutes: 45,
-      scheduledStartTime: "2026-11-28T13:00:00+05:30",
-      entryWindowMinutes: 30,
+      scheduledStartTime: "2026-11-27T00:00:00+05:30",
+      entryWindowMinutes: 10080,
+      alwaysOpen: true,
       isActive: true,
       createdAt: new Date().toISOString()
     }
@@ -446,6 +447,8 @@ const initialData = {
   submissions: []
 };
 
+const globalForStore = globalThis;
+
 function ensureDataFile() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -458,8 +461,15 @@ function ensureDataFile() {
 export function getStore() {
   ensureDataFile();
   try {
+    const stat = fs.statSync(DATA_FILE);
+    const cached = globalForStore.__portalStoreCache;
+    if (cached && cached.mtimeMs === stat.mtimeMs && cached.data) {
+      return cached.data;
+    }
     const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    globalForStore.__portalStoreCache = { mtimeMs: stat.mtimeMs, data: parsed };
+    return parsed;
   } catch (error) {
     console.error('Error reading store file, resetting to initial data:', error);
     return initialData;
@@ -470,6 +480,8 @@ export function saveStore(data) {
   ensureDataFile();
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    const stat = fs.statSync(DATA_FILE);
+    globalForStore.__portalStoreCache = { mtimeMs: stat.mtimeMs, data };
     return true;
   } catch (error) {
     console.error('Error writing store file:', error);

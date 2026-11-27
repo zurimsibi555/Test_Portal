@@ -27,8 +27,6 @@ function AdminLoginForm() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        // Also set localStorage for backup
-        localStorage.setItem('admin_key', key.trim());
         router.push(redirectPath);
       } else {
         setError(data.message || 'Invalid Admin Secret Key');
@@ -70,7 +68,7 @@ function AdminLoginForm() {
             </label>
             <input
               type="password"
-              placeholder="Enter admin key (default: teacher123)"
+              placeholder="Enter admin secret key"
               value={key}
               onChange={(e) => setKey(e.target.value)}
               className="w-full px-4 py-3 bg-[#FAF8F5] border border-stone-300 rounded-xl text-stone-900 text-sm placeholder-stone-400 focus:outline-none focus:bg-white focus:border-emerald-700 transition"
@@ -102,7 +100,7 @@ function AdminLoginForm() {
           <Link href="/" className="hover:text-emerald-700 transition">
             &larr; Back to Student Portal
           </Link>
-          <span className="font-mono text-[11px]">Key: teacher123</span>
+          <span className="text-[11px] text-stone-400">Authorized Personnel Only</span>
         </div>
       </div>
     </div>

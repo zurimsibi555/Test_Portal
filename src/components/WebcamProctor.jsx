@@ -8,7 +8,13 @@ import {
   ShieldAlert,
   Mic,
   MicOff,
+  Camera,
+  RefreshCw,
 } from 'lucide-react';
+import { downsampleFloat32ToInt16, int16ToBase64 } from '@/lib/audioPcm';
+
+const TARGET_SAMPLE_RATE = 16000;
+const SAMPLES_PER_CHUNK = 4800; // 300ms of clear 16kHz wideband voice
 
 export default function WebcamProctor({
   isActive,
@@ -18,6 +24,7 @@ export default function WebcamProctor({
   rollNo = '',
   testId = '',
   maxWarnings = 3,
+  retryTrigger = 0,
   onViolation,
   onPermissionStatus,
 }) {
@@ -25,6 +32,8 @@ export default function WebcamProctor({
   const [cameraError, setCameraError] = useState('');
   const [camGranted, setCamGranted] = useState(false);
   const [micGranted, setMicGranted] = useState(false);
+  const [checkingPerms, setCheckingPerms] = useState(true);
+  const [internalRetry, setInternalRetry] = useState(0);
   const [micLevel, setMicLevel] = useState(0);
   const [isPresent, setIsPresent] = useState(true);
   const [showWarningModal, setShowWarningModal] = useState(false);
@@ -32,30 +41,58 @@ export default function WebcamProctor({
   const [graceCountdown, setGraceCountdown] = useState(10);
 
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
+  const presenceCanvasRef = useRef(null);
+  const streamCanvasRef = useRef(null);
   const checkIntervalRef = useRef(null);
-  const pingIntervalRef = useRef(null);
   const countdownIntervalRef = useRef(null);
-  const audioCtxRef = useRef(null);
-  const micAnalyserRef = useRef(null);
-  const micDataRef = useRef(null);
-  const latestAudioClipRef = useRef(null);
-  const latestAudioMimeRef = useRef('audio/webm');
+  const alertAudioCtxRef = useRef(null);
+
+  // Voice PCM streaming refs (Priority #1)
+  const audioQueueRef = useRef([]);
+  const audioSeqRef = useRef(0);
+  const pcmBufferRef = useRef([]);
+  const pcmSampleCountRef = useRef(0);
+
   const consecutiveMissesRef = useRef(0);
   const isGraceActiveRef = useRef(false);
   const isPresentRef = useRef(true);
   const warningCountRef = useRef(0);
   const micLevelRef = useRef(0);
+  const lastMicUiUpdateRef = useRef(0);
+  const camGrantedRef = useRef(false);
+  const micGrantedRef = useRef(false);
+  const onPermissionStatusRef = useRef(onPermissionStatus);
+
+  useEffect(() => {
+    onPermissionStatusRef.current = onPermissionStatus;
+  }, [onPermissionStatus]);
 
   const isPrepareMode = mode === 'PREPARE';
+
+  const notifyPerms = useCallback((cam, mic, checking = false, error = '') => {
+    camGrantedRef.current = cam;
+    micGrantedRef.current = mic;
+    setCamGranted(cam);
+    setMicGranted(mic);
+    setCheckingPerms(checking);
+    setCameraError(error);
+    if (onPermissionStatusRef.current) {
+      onPermissionStatusRef.current({
+        camGranted: cam,
+        micGranted: mic,
+        checking,
+        error,
+      });
+    }
+  }, []);
 
   // Play synthesized warning beep using Web Audio API (Exam mode only)
   const playAlertSound = useCallback(() => {
     try {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      if (!alertAudioCtxRef.current) {
+        alertAudioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
       }
-      const ctx = audioCtxRef.current;
+      const ctx = alertAudioCtxRef.current;
       if (ctx.state === 'suspended') {
         ctx.resume();
       }
@@ -120,7 +157,6 @@ export default function WebcamProctor({
     [isPrepareMode, sessionId, maxWarnings, onViolation, playAlertSound]
   );
 
-  // Clear Warning Popup when presence is restored
   const clearWebcamWarning = useCallback(() => {
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     setShowWarningModal(false);
@@ -128,208 +164,275 @@ export default function WebcamProctor({
     consecutiveMissesRef.current = 0;
   }, []);
 
-  // Initialize Camera + Microphone Stream
+  // Forcefully require BOTH Camera & Microphone + capture continuous 16kHz PCM voice
   useEffect(() => {
     if (!isActive) return;
 
     let localStream = null;
-    let micAnalyserCtx = null;
-    let recorderLoopTimer = null;
-    let activeRecorder = null;
+    let captureCtx = null;
+    let processorNode = null;
+    let silentGain = null;
+    let sourceNode = null;
     let cancelled = false;
+    let camPermHandle = null;
+    let micPermHandle = null;
+
+    const handleTrackRevoked = (message) => {
+      if (cancelled) return;
+      if (localStream) {
+        localStream.getTracks().forEach((t) => {
+          try {
+            t.stop();
+          } catch {}
+        });
+      }
+      setStream(null);
+      notifyPerms(false, false, false, message);
+    };
 
     async function initMedia() {
-      let hasCam = false;
-      let hasMic = false;
+      notifyPerms(false, false, true, '');
 
       try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error('Browser does not support Camera/Microphone access.');
+        }
+
         localStream = await navigator.mediaDevices.getUserMedia({
           video: {
-            width: { ideal: 320 },
-            height: { ideal: 240 },
+            width: { ideal: 320, max: 480 },
+            height: { ideal: 240, max: 360 },
+            frameRate: { ideal: 15, max: 20 },
             facingMode: 'user',
           },
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1,
+          },
         });
-        hasCam = localStream.getVideoTracks().length > 0;
-        hasMic = localStream.getAudioTracks().length > 0;
-      } catch {
-        // Fallback: try video-only if microphone is unavailable/denied
-        try {
-          localStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              width: { ideal: 320 },
-              height: { ideal: 240 },
-              facingMode: 'user',
-            },
-            audio: false,
-          });
-          hasCam = localStream.getVideoTracks().length > 0;
-        } catch {
-          setCameraError('Camera & Microphone access denied or device not detected.');
-          setCamGranted(false);
-          setMicGranted(false);
-          if (onPermissionStatus) {
-            onPermissionStatus({
-              camGranted: false,
-              micGranted: false,
-              error: 'Camera and microphone permission denied.',
-            });
-          }
-          if (!isPrepareMode) {
-            triggerWebcamWarning('Camera/Microphone permission not granted');
-          }
-          return;
-        }
-      }
-
-      if (cancelled) {
-        localStream?.getTracks().forEach((t) => t.stop());
+      } catch (err) {
+        if (cancelled) return;
+        const msg =
+          err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError'
+            ? 'Camera & Microphone permissions are mandatory. Please allow both in your browser settings.'
+            : 'Camera or Microphone not detected/accessible. Both devices are required.';
+        notifyPerms(false, false, false, msg);
         return;
       }
 
-      setStream(localStream);
-      setCamGranted(hasCam);
-      setMicGranted(hasMic);
-      setCameraError('');
-      if (onPermissionStatus) {
-        onPermissionStatus({ camGranted: hasCam, micGranted: hasMic, error: '' });
+      if (cancelled) {
+        localStream.getTracks().forEach((t) => t.stop());
+        return;
       }
+
+      const videoTrack = localStream.getVideoTracks()[0];
+      const audioTrack = localStream.getAudioTracks()[0];
+      const hasLiveCam = Boolean(videoTrack && videoTrack.readyState === 'live');
+      const hasLiveMic = Boolean(audioTrack && audioTrack.readyState === 'live');
+
+      // Enforce BOTH camera AND microphone strictly (no video-only fallback)
+      if (!hasLiveCam || !hasLiveMic) {
+        localStream.getTracks().forEach((t) => t.stop());
+        notifyPerms(
+          hasLiveCam,
+          hasLiveMic,
+          false,
+          'Both Camera and Microphone permissions are strictly required to continue.'
+        );
+        return;
+      }
+
+      videoTrack.onended = () =>
+        handleTrackRevoked('Camera access was stopped or disconnected. Re-enable Camera & Mic.');
+      audioTrack.onended = () =>
+        handleTrackRevoked('Microphone access was stopped or disconnected. Re-enable Camera & Mic.');
+
+      // Watch live browser permission revocations
+      if (navigator.permissions?.query) {
+        try {
+          camPermHandle = await navigator.permissions.query({ name: 'camera' });
+          camPermHandle.onchange = () => {
+            if (camPermHandle.state !== 'granted') {
+              handleTrackRevoked('Camera permission was revoked. Please allow Camera & Mic.');
+            }
+          };
+        } catch {}
+        try {
+          micPermHandle = await navigator.permissions.query({ name: 'microphone' });
+          micPermHandle.onchange = () => {
+            if (micPermHandle.state !== 'granted') {
+              handleTrackRevoked('Microphone permission was revoked. Please allow Camera & Mic.');
+            }
+          };
+        } catch {}
+      }
+
+      setStream(localStream);
+      notifyPerms(true, true, false, '');
 
       if (videoRef.current) {
         videoRef.current.srcObject = localStream;
       }
 
-      // Setup live mic analyser & 2.5s clip recorder for admin audio monitoring
-      if (hasMic) {
-        try {
-          const AudioCtx = window.AudioContext || window.webkitAudioContext;
-          micAnalyserCtx = new AudioCtx();
-          const source = micAnalyserCtx.createMediaStreamSource(localStream);
-          const analyser = micAnalyserCtx.createAnalyser();
-          analyser.fftSize = 256;
-          source.connect(analyser);
-          micAnalyserRef.current = analyser;
-          micDataRef.current = new Uint8Array(analyser.frequencyBinCount);
-        } catch {
-          // ignore audio context errors
-        }
+      // Setup continuous, gap-free 16kHz PCM voice capture & RMS mic meter
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        captureCtx = new AudioCtx();
+        const audioOnlyStream = new MediaStream([audioTrack]);
+        sourceNode = captureCtx.createMediaStreamSource(audioOnlyStream);
+        processorNode = captureCtx.createScriptProcessor(4096, 1, 1);
+        silentGain = captureCtx.createGain();
+        silentGain.gain.value = 0;
 
-        try {
-          const audioOnlyStream = new MediaStream(localStream.getAudioTracks());
-          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-            ? 'audio/webm;codecs=opus'
-            : MediaRecorder.isTypeSupported('audio/webm')
-            ? 'audio/webm'
-            : '';
-          latestAudioMimeRef.current = mimeType || 'audio/webm';
+        pcmBufferRef.current = [];
+        pcmSampleCountRef.current = 0;
 
-          const recordSlice = () => {
-            if (cancelled) return;
-            try {
-              const rec = mimeType
-                ? new MediaRecorder(audioOnlyStream, { mimeType })
-                : new MediaRecorder(audioOnlyStream);
-              activeRecorder = rec;
-              const chunks = [];
-              rec.ondataavailable = (ev) => {
-                if (ev.data && ev.data.size > 0) chunks.push(ev.data);
-              };
-              rec.onstop = () => {
-                if (chunks.length === 0 || cancelled) return;
-                const blob = new Blob(chunks, { type: latestAudioMimeRef.current });
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                  const res = reader.result;
-                  if (typeof res === 'string') {
-                    latestAudioClipRef.current = res;
-                  }
-                };
-                reader.readAsDataURL(blob);
-              };
-              rec.start();
-              recorderLoopTimer = setTimeout(() => {
-                if (rec.state === 'recording') {
-                  rec.stop();
-                }
-                if (!cancelled) {
-                  recordSlice();
-                }
-              }, 2500);
-            } catch {
-              // ignore MediaRecorder errors
-            }
-          };
+        processorNode.onaudioprocess = (ev) => {
+          if (cancelled) return;
+          const inputData = ev.inputBuffer.getChannelData(0);
 
-          if (typeof MediaRecorder !== 'undefined') {
-            recordSlice();
+          // 1. Compute smooth RMS mic level
+          let sumSq = 0;
+          for (let i = 0; i < inputData.length; i++) {
+            sumSq += inputData[i] * inputData[i];
           }
-        } catch {
-          // ignore
+          const rms = Math.sqrt(sumSq / inputData.length);
+          const level = Math.min(100, Math.round(rms * 420));
+          micLevelRef.current = level;
+          const nowTs = Date.now();
+          if (nowTs - lastMicUiUpdateRef.current >= 180) {
+            lastMicUiUpdateRef.current = nowTs;
+            setMicLevel(level);
+          }
+
+          // 2. Resample to 16kHz Int16 PCM and flush every 300ms
+          const int16 = downsampleFloat32ToInt16(
+            inputData,
+            captureCtx.sampleRate,
+            TARGET_SAMPLE_RATE
+          );
+          if (int16.length > 0) {
+            pcmBufferRef.current.push(int16);
+            pcmSampleCountRef.current += int16.length;
+
+            if (pcmSampleCountRef.current >= SAMPLES_PER_CHUNK) {
+              const combined = new Int16Array(pcmSampleCountRef.current);
+              let offset = 0;
+              for (const part of pcmBufferRef.current) {
+                combined.set(part, offset);
+                offset += part.length;
+              }
+              pcmBufferRef.current = [];
+              pcmSampleCountRef.current = 0;
+
+              const pcmBase64 = int16ToBase64(combined);
+              audioSeqRef.current += 1;
+              audioQueueRef.current.push({
+                seq: audioSeqRef.current,
+                sampleRate: TARGET_SAMPLE_RATE,
+                pcmBase64,
+              });
+              if (audioQueueRef.current.length > 16) {
+                audioQueueRef.current = audioQueueRef.current.slice(-16);
+              }
+            }
+          }
+        };
+
+        sourceNode.connect(processorNode);
+        processorNode.connect(silentGain);
+        silentGain.connect(captureCtx.destination);
+
+        if (captureCtx.state === 'suspended') {
+          captureCtx.resume().catch(() => {});
         }
+      } catch {
+        // Ignore AudioContext setup errors
       }
     }
+
+    const resumeAudioOnGesture = () => {
+      if (captureCtx && captureCtx.state === 'suspended') {
+        captureCtx.resume().catch(() => {});
+      }
+    };
+    window.addEventListener('pointerdown', resumeAudioOnGesture, { passive: true });
+    window.addEventListener('keydown', resumeAudioOnGesture, { passive: true });
 
     initMedia();
 
     return () => {
       cancelled = true;
-      if (recorderLoopTimer) clearTimeout(recorderLoopTimer);
-      if (activeRecorder && activeRecorder.state === 'recording') {
+      window.removeEventListener('pointerdown', resumeAudioOnGesture);
+      window.removeEventListener('keydown', resumeAudioOnGesture);
+      if (camPermHandle) camPermHandle.onchange = null;
+      if (micPermHandle) micPermHandle.onchange = null;
+      if (processorNode) {
+        processorNode.onaudioprocess = null;
         try {
-          activeRecorder.stop();
+          processorNode.disconnect();
         } catch {}
       }
-      if (micAnalyserCtx && micAnalyserCtx.state !== 'closed') {
-        micAnalyserCtx.close().catch(() => {});
+      if (sourceNode) {
+        try {
+          sourceNode.disconnect();
+        } catch {}
+      }
+      if (silentGain) {
+        try {
+          silentGain.disconnect();
+        } catch {}
+      }
+      if (captureCtx && captureCtx.state !== 'closed') {
+        captureCtx.close().catch(() => {});
       }
       if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
+        localStream.getTracks().forEach((track) => {
+          track.onended = null;
+          track.stop();
+        });
       }
     };
-  }, [isActive, isPrepareMode]);
+  }, [isActive, retryTrigger, internalRetry, notifyPerms]);
 
-  // Bind video element when stream changes
+  // Bind video element when stream or permission state changes
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      videoRef.current.play?.().catch(() => {});
     }
-  }, [stream]);
+  }, [stream, camGranted]);
 
-  // Frame & Audio Level Analysis Loop
+  // Lightweight Presence Check Loop (120x90 canvas so UI stays smooth)
   useEffect(() => {
     if (!isActive || !stream) return;
 
     checkIntervalRef.current = setInterval(() => {
-      // 1. Sample mic level
-      if (micAnalyserRef.current && micDataRef.current) {
-        micAnalyserRef.current.getByteFrequencyData(micDataRef.current);
-        let sum = 0;
-        for (let i = 0; i < micDataRef.current.length; i++) {
-          sum += micDataRef.current[i];
-        }
-        const avg = sum / micDataRef.current.length;
-        const normalized = Math.min(100, Math.round((avg / 90) * 100));
-        micLevelRef.current = normalized;
-        setMicLevel(normalized);
+      // Verify live track health continuously
+      const vTrack = stream.getVideoTracks()[0];
+      const aTrack = stream.getAudioTracks()[0];
+      if (!vTrack || vTrack.readyState !== 'live' || !aTrack || aTrack.readyState !== 'live') {
+        notifyPerms(false, false, false, 'Camera or Microphone stopped. Both must remain active.');
+        return;
       }
 
-      // 2. Analyze video frame presence
       const video = videoRef.current;
-      const canvas = canvasRef.current;
+      const canvas = presenceCanvasRef.current;
       if (!video || !canvas || video.readyState < 2) return;
 
-      const ctx = canvas.getContext('2d');
-      canvas.width = 240;
-      canvas.height = 180;
-      ctx.drawImage(video, 0, 0, 240, 180);
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      canvas.width = 120;
+      canvas.height = 90;
+      ctx.drawImage(video, 0, 0, 120, 90);
 
-      const frameData = ctx.getImageData(0, 0, 240, 180);
+      const frameData = ctx.getImageData(0, 0, 120, 90);
       const data = frameData.data;
 
       let totalBrightness = 0;
       let totalVariation = 0;
-      const sampleStep = 12;
+      const sampleStep = 10;
       let sampleCount = 0;
 
       for (let i = 0; i < data.length; i += 4 * sampleStep) {
@@ -353,7 +456,7 @@ export default function WebcamProctor({
       isPresentRef.current = hasPresence;
       setIsPresent(hasPresence);
 
-      if (!isPrepareMode) {
+      if (!isPrepareMode && camGrantedRef.current && micGrantedRef.current) {
         if (!hasPresence) {
           consecutiveMissesRef.current += 1;
           if (consecutiveMissesRef.current >= 2) {
@@ -378,31 +481,50 @@ export default function WebcamProctor({
       if (checkIntervalRef.current) clearInterval(checkIntervalRef.current);
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     };
-  }, [isActive, stream, isPrepareMode, showWarningModal, triggerWebcamWarning, clearWebcamWarning]);
+  }, [isActive, stream, isPrepareMode, showWarningModal, triggerWebcamWarning, clearWebcamWarning, notifyPerms]);
 
-  // Stream live snapshots & mic audio to Admin Monitor every 2.5 seconds
+  // Non-overlapping streaming loop: Voice PCM chunks get top priority; adaptive video snapshots follow
   useEffect(() => {
     if (!isActive || !sessionId) return;
 
+    let stopped = false;
+    let timerId = null;
+    let lastFrameSentAt = 0;
+    let lastPingDurationMs = 0;
+
     const sendPing = async () => {
+      if (stopped) return;
+
+      const now = Date.now();
+      // Peek audio chunks and remove only after server acknowledges so voice never drops on transient errors
+      const audioChunks = audioQueueRef.current.slice(0, 6);
+
+      // Voice priority: skip video frame if audio backlog exists, previous request was slow (>900ms), or <1200ms elapsed
       let frameDataUrl = null;
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-      if (canvas && video && video.readyState >= 2) {
-        try {
-          const ctx = canvas.getContext('2d');
-          canvas.width = 160;
-          canvas.height = 120;
-          ctx.drawImage(video, 0, 0, 160, 120);
-          frameDataUrl = canvas.toDataURL('image/jpeg', 0.35);
-        } catch {
-          // ignore
+      const shouldSendFrame =
+        camGrantedRef.current &&
+        audioQueueRef.current.length <= 1 &&
+        now - lastFrameSentAt >= 1200 &&
+        lastPingDurationMs < 900;
+
+      if (shouldSendFrame) {
+        const canvas = streamCanvasRef.current;
+        const video = videoRef.current;
+        if (canvas && video && video.readyState >= 2) {
+          try {
+            const ctx = canvas.getContext('2d');
+            canvas.width = 200;
+            canvas.height = 150;
+            ctx.drawImage(video, 0, 0, 200, 150);
+            frameDataUrl = canvas.toDataURL('image/jpeg', 0.42);
+            lastFrameSentAt = now;
+          } catch {
+            // ignore
+          }
         }
       }
 
-      const audioClip = latestAudioClipRef.current;
-      latestAudioClipRef.current = null;
-
+      const startedAt = Date.now();
       try {
         const res = await fetch('/api/proctor/ping', {
           method: 'POST',
@@ -415,51 +537,67 @@ export default function WebcamProctor({
             mode,
             frameDataUrl,
             audioLevel: micLevelRef.current,
-            audioClipBase64: audioClip,
-            audioMimeType: latestAudioMimeRef.current,
-            camGranted,
-            micGranted,
+            audioChunks,
+            camGranted: camGrantedRef.current,
+            micGranted: micGrantedRef.current,
             isPresent: isPresentRef.current,
             webcamWarnings: warningCountRef.current,
           }),
         });
+        lastPingDurationMs = Date.now() - startedAt;
+        if (res.ok && audioChunks.length > 0) {
+          audioQueueRef.current.splice(0, audioChunks.length);
+        }
         const data = await res.json();
         if (data.terminate && !isPrepareMode && onViolation) {
           onViolation(data.terminateReason || 'Exam terminated by Administrator');
         }
       } catch {
-        // ignore network hiccups
+        lastPingDurationMs = Date.now() - startedAt;
+      } finally {
+        if (!stopped) {
+          const nextDelay = audioQueueRef.current.length > 0 ? 120 : 320;
+          timerId = setTimeout(sendPing, nextDelay);
+        }
       }
     };
 
     sendPing();
-    pingIntervalRef.current = setInterval(sendPing, 4000);
-    return () => clearInterval(pingIntervalRef.current);
-  }, [isActive, sessionId, studentName, rollNo, testId, mode, camGranted, micGranted, isPrepareMode, onViolation]);
+    return () => {
+      stopped = true;
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [isActive, sessionId, studentName, rollNo, testId, mode, isPrepareMode, onViolation]);
 
   if (!isActive) return null;
 
-  // PREPARE MODE: Keep camera & mic completely hidden from student UI while permissions & admin monitoring remain active
+  // PREPARE MODE: Keep camera & mic hidden from student UI (PreparePage handles mandatory permission gate overlay)
   if (isPrepareMode) {
     return (
       <div className="hidden" aria-hidden="true">
-        <canvas ref={canvasRef} className="hidden" />
+        <canvas ref={presenceCanvasRef} className="hidden" />
+        <canvas ref={streamCanvasRef} className="hidden" />
         <video ref={videoRef} autoPlay playsInline muted className="hidden" />
       </div>
     );
   }
 
-  // EXAM MODE: Visible Webcam + Mic Monitor PiP Badge (Milky White + Emerald Theme)
+  const permissionsMissing = !checkingPerms && (!camGranted || !micGranted);
+
+  // EXAM MODE: Visible Webcam + Mic Monitor PiP Badge + Forceful Permission Block
   return (
     <>
-      <canvas ref={canvasRef} className="hidden" />
+      <canvas ref={presenceCanvasRef} className="hidden" />
+      <canvas ref={streamCanvasRef} className="hidden" />
 
       <div className="fixed bottom-4 right-4 z-40 bg-white/95 backdrop-blur border border-stone-200 rounded-2xl p-2.5 shadow-lg flex flex-col gap-2 w-48">
         <div className="flex items-center justify-between px-0.5 text-[10px] font-semibold text-stone-700">
           <div className="flex items-center gap-1.5">
             <span
               className={`w-2 h-2 rounded-full ${
-                isPresent ? 'bg-emerald-600 animate-pulse' : 'bg-rose-500 animate-ping'
+                camGranted && micGranted && isPresent
+                  ? 'bg-emerald-600 animate-pulse'
+                  : 'bg-rose-500 animate-ping'
               }`}
             ></span>
             <span>Cam & Mic Proctor</span>
@@ -472,10 +610,10 @@ export default function WebcamProctor({
         </div>
 
         <div className="relative rounded-xl overflow-hidden bg-[#FAF8F5] aspect-[4/3] flex items-center justify-center border border-stone-200">
-          {cameraError ? (
+          {cameraError || !camGranted ? (
             <div className="p-2 text-center text-rose-600 space-y-1">
               <CameraOff className="w-5 h-5 mx-auto" />
-              <p className="text-[9px] leading-tight">No Camera</p>
+              <p className="text-[9px] leading-tight">Permission Required</p>
             </div>
           ) : (
             <video
@@ -489,7 +627,7 @@ export default function WebcamProctor({
 
           {/* Overlay Status Badge */}
           <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur text-[9px] text-stone-800 border border-stone-200 font-medium flex items-center gap-1 shadow-xs">
-            {isPresent ? (
+            {isPresent && camGranted ? (
               <>
                 <CheckCircle2 className="w-2.5 h-2.5 text-emerald-700" />
                 <span>Active</span>
@@ -524,8 +662,76 @@ export default function WebcamProctor({
         </div>
       </div>
 
+      {/* FORCEFUL EXAM PERMISSION LOCK OVERLAY (Non-dismissible until BOTH Camera & Mic granted) */}
+      {permissionsMissing && (
+        <div className="fixed inset-0 z-[70] bg-stone-900/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white border-2 border-rose-500 rounded-3xl p-7 shadow-2xl text-center space-y-5">
+            <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-9 h-9" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="inline-block px-3 py-1 rounded-full bg-rose-100 text-rose-800 text-[11px] font-black uppercase tracking-wider">
+                Mandatory Permissions Required
+              </span>
+              <h3 className="text-xl font-black text-stone-900">
+                Camera &amp; Microphone Access Blocked
+              </h3>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                {cameraError ||
+                  'Exam mode cannot continue without active Camera and Microphone permissions. Please allow both in your browser.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 text-xs">
+              <div
+                className={`p-3 rounded-xl border flex items-center justify-center gap-2 font-bold ${
+                  camGranted
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                <Camera className="w-4 h-4" />
+                <span>{camGranted ? 'Camera Active' : 'Camera Denied'}</span>
+              </div>
+              <div
+                className={`p-3 rounded-xl border flex items-center justify-center gap-2 font-bold ${
+                  micGranted
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                <Mic className="w-4 h-4" />
+                <span>{micGranted ? 'Mic Active' : 'Mic Denied'}</span>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-[#FAF8F5] border border-stone-200 text-[11px] text-stone-600 text-left space-y-1">
+              <div className="font-bold text-stone-800">How to enable:</div>
+              <p>
+                1. Click the <strong>Camera / Lock icon</strong> in your browser address bar.
+                <br />
+                2. Set both <strong>Camera</strong> and <strong>Microphone</strong> to <strong>Allow</strong>.
+                <br />
+                3. Click the button below to resume your exam.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled={checkingPerms}
+              onClick={() => setInternalRetry((n) => n + 1)}
+              className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              <RefreshCw className={`w-4 h-4 ${checkingPerms ? 'animate-spin' : ''}`} />
+              <span>{checkingPerms ? 'Verifying Permissions...' : 'Allow & Re-Verify Camera & Mic'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* WARNING POPUP MODAL (When student is not captured into webcam) */}
-      {showWarningModal && (
+      {!permissionsMissing && showWarningModal && (
         <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200">
           <div className="max-w-md w-full bg-white border-2 border-rose-500 rounded-3xl p-6 shadow-2xl text-center space-y-5">
             <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center mx-auto animate-bounce">

@@ -1,18 +1,25 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
+import { getConfiguredAdminSecret } from '@/lib/adminAuth';
 
 export async function POST(req) {
   try {
     const { secretKey } = await req.json();
-    const validSecret = process.env.ADMIN_SESSION_TOKEN || process.env.ADMIN_SECRET_KEY || 'teacher123';
+    const validSecret = getConfiguredAdminSecret();
+    const candidate = typeof secretKey === 'string' ? secretKey : '';
 
-    if (secretKey === validSecret) {
+    const hashA = crypto.createHash('sha256').update(candidate).digest();
+    const hashB = crypto.createHash('sha256').update(validSecret).digest();
+
+    if (candidate && crypto.timingSafeEqual(hashA, hashB)) {
       const response = NextResponse.json({ success: true, message: 'Authenticated successfully' });
-      
-      // Set admin session cookie valid for 7 days
+
+      // Store session in an httpOnly cookie so frontend JS/localStorage never holds the password
       response.cookies.set('admin_session', validSecret, {
         path: '/',
-        httpOnly: false, // Accessible to verify and middleware
+        httpOnly: true,
         sameSite: 'lax',
+        secure: req.headers.get('x-forwarded-proto') === 'https',
         maxAge: 60 * 60 * 24 * 7,
       });
 
@@ -20,7 +27,7 @@ export async function POST(req) {
     }
 
     return NextResponse.json(
-      { success: false, message: 'Invalid Admin Secret Key. (Default: teacher123)' },
+      { success: false, message: 'Invalid Admin Secret Key' },
       { status: 401 }
     );
   } catch (error) {
@@ -32,6 +39,8 @@ export async function DELETE() {
   const response = NextResponse.json({ success: true, message: 'Logged out successfully' });
   response.cookies.set('admin_session', '', {
     path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
     maxAge: 0,
   });
   return response;

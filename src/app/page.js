@@ -30,22 +30,30 @@ export default function Home() {
   useEffect(() => {
     async function fetchTests() {
       try {
-        const res = await fetch('/api/admin/manage');
+        const res = await fetch('/api/admin/manage', { cache: 'no-store' });
         const data = await res.json();
-        if (data.success && data.tests?.length > 0) {
-          setTests(data.tests);
-        } else {
-          setTests([
-            {
-              id: 'demo-java-test',
-              title: 'Java Foundation Test',
-              description:
-                'Official Core Java, OOPs concepts, and Problem Solving examination.',
-              durationMinutes: 45,
-              scheduledStartTime: '2026-11-28T13:00:00+05:30',
-              entryWindowMinutes: 30,
-            },
-          ]);
+        const loadedTests =
+          data.success && data.tests?.length > 0
+            ? data.tests
+            : [
+                {
+                  id: 'demo-java-test',
+                  title: 'Java Foundation Test',
+                  description:
+                    'Official Core Java, OOPs concepts, and Problem Solving examination.',
+                  durationMinutes: 45,
+                  scheduledStartTime: '2026-11-27T00:00:00+05:30',
+                  entryWindowMinutes: 10080,
+                  alwaysOpen: true,
+                },
+              ];
+        setTests(loadedTests);
+        const firstTest = loadedTests[0];
+        if (typeof window !== 'undefined' && firstTest?.id && !firstTest.alwaysOpen) {
+          const status = localStorage.getItem(`exam_completed_${firstTest.id}`);
+          if (status) {
+            setAlreadyAttended(true);
+          }
         }
       } catch (err) {
         console.error(err);
@@ -67,23 +75,16 @@ export default function Home() {
     title: 'Java Foundation Test',
     description: 'Official Core Java, OOPs concepts, and Problem Solving examination.',
     durationMinutes: 45,
-    scheduledStartTime: '2026-11-28T13:00:00+05:30',
-    entryWindowMinutes: 30,
+    scheduledStartTime: '2026-11-27T00:00:00+05:30',
+    entryWindowMinutes: 10080,
+    alwaysOpen: true,
   };
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && primaryTest?.id) {
-      const status = localStorage.getItem(`exam_completed_${primaryTest.id}`);
-      if (status) {
-        setAlreadyAttended(true);
-      }
-    }
-  }, [primaryTest?.id]);
 
   const schedule = getExamScheduleStatus(primaryTest, nowMs);
   const isExpiredAbsent = schedule.status === 'EXPIRED';
   const isUpcoming = schedule.status === 'UPCOMING';
-  const isLive = schedule.status === 'LIVE' && !alreadyAttended;
+  const isBlockedAttended = !schedule.alwaysOpen && alreadyAttended;
+  const isLive = schedule.status === 'LIVE' && !isBlockedAttended;
 
   const formattedStart = new Date(schedule.startMs).toLocaleString('en-IN', {
     weekday: 'long',
@@ -178,10 +179,14 @@ export default function Home() {
                   </span>
                   <h2 className="text-xl font-black text-stone-900">{primaryTest.title}</h2>
                   <p className="text-xs text-stone-600 leading-relaxed">
-                    The examination has started! Enter within the 30-minute window or you will be marked <strong>Absent</strong>.
+                    {schedule.alwaysOpen
+                      ? 'The examination is currently live and open for testing. Camera and microphone permissions are required.'
+                      : 'The examination has started! Enter within the 30-minute window or you will be marked Absent.'}
                   </p>
-                  <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 font-mono text-sm font-bold">
-                    Entry Closes In: {formatCountdown(schedule.msUntilExpiry)}
+                  <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 font-mono text-sm font-bold">
+                    {schedule.alwaysOpen
+                      ? 'Status: Open for Live Testing'
+                      : `Entry Closes In: ${formatCountdown(schedule.msUntilExpiry)}`}
                   </div>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -257,7 +262,9 @@ export default function Home() {
           </h1>
 
           <p className="text-xs md:text-sm text-stone-600 max-w-lg mx-auto leading-relaxed">
-            Exam opens on <strong>Saturday, 28 Nov at 1:00 PM sharp</strong> with a strict <strong>30-minute entry window</strong>. Both camera and microphone permissions are required during the exam.
+            {schedule.alwaysOpen
+              ? 'Examination is currently live and open for testing. Both camera and microphone permissions are strictly required.'
+              : 'Exam opens on schedule with a strict entry window. Both camera and microphone permissions are required during the exam.'}
           </p>
         </div>
 
@@ -302,7 +309,9 @@ export default function Home() {
                 </span>
                 <span className="text-[10px] font-semibold text-stone-500">
                   {isUpcoming
-                    ? `Opens Sat 28 Nov, 1:00 PM (${formatCountdown(schedule.msUntilStart)})`
+                    ? `Opens Soon (${formatCountdown(schedule.msUntilStart)})`
+                    : schedule.alwaysOpen
+                    ? 'Live Now • Open for Testing'
                     : `Live • Closes in ${formatCountdown(schedule.msUntilExpiry)}`}
                 </span>
               </div>
@@ -344,7 +353,7 @@ export default function Home() {
 
             {/* Primary Action Button */}
             <div className="pt-2">
-              {alreadyAttended ? (
+              {isBlockedAttended ? (
                 <div className="w-full py-4 bg-stone-100 border border-stone-300 text-stone-700 rounded-2xl font-bold text-sm flex items-center justify-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-700" />
                   <span>You have already completed/submitted this examination.</span>

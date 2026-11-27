@@ -13,8 +13,7 @@ export async function POST(req) {
       mode = 'EXAM',
       frameDataUrl,
       audioLevel,
-      audioClipBase64,
-      audioMimeType,
+      audioChunks,
       camGranted,
       micGranted,
       isPresent,
@@ -35,20 +34,23 @@ export async function POST(req) {
       mode,
       frameDataUrl,
       audioLevel,
-      audioClipBase64,
-      audioMimeType,
+      audioChunks,
       camGranted,
       micGranted,
       isPresent,
       webcamWarnings,
     });
 
-    // Update lightweight status on session if it exists
+    // Only write store.json when permission status changes to avoid disk I/O lag on every ping
     if (session && !session.isSubmitted) {
-      session.camGranted = Boolean(camGranted);
-      session.micGranted = Boolean(micGranted);
-      session.lastMonitorAt = new Date().toISOString();
-      saveStore(store);
+      const nextCam = Boolean(camGranted);
+      const nextMic = Boolean(micGranted);
+      if (session.camGranted !== nextCam || session.micGranted !== nextMic) {
+        session.camGranted = nextCam;
+        session.micGranted = nextMic;
+        session.lastMonitorAt = new Date().toISOString();
+        saveStore(store);
+      }
     }
 
     const feed = getLiveFeed(sessionId);
