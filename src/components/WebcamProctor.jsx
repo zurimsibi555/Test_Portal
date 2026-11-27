@@ -33,6 +33,7 @@ export default function WebcamProctor({
   const [cameraError, setCameraError] = useState('');
   const [camGranted, setCamGranted] = useState(false);
   const [micGranted, setMicGranted] = useState(false);
+  const [micMuted, setMicMuted] = useState(false);
   const [audioSuspended, setAudioSuspended] = useState(false);
   const [checkingPerms, setCheckingPerms] = useState(true);
   const [internalRetry, setInternalRetry] = useState(0);
@@ -51,10 +52,13 @@ export default function WebcamProctor({
   const countdownIntervalRef = useRef(null);
   const alertAudioCtxRef = useRef(null);
   const captureCtxRef = useRef(null);
+  const analyserNodeRef = useRef(null);
+  const lastAudioProcessAtRef = useRef(0);
   const autoSessionIdRef = useRef('');
   const rtcPeersRef = useRef(new Map());
   const rtcOutgoingRef = useRef({ answers: [], candidates: [] });
   const hasConnectedRtcRef = useRef(false);
+  const hasVerifiedRtcAudioRef = useRef(false);
 
   // Voice PCM streaming refs (Priority #1)
   const audioQueueRef = useRef([]);
@@ -71,6 +75,7 @@ export default function WebcamProctor({
   const lastMicUiUpdateRef = useRef(0);
   const camGrantedRef = useRef(false);
   const micGrantedRef = useRef(false);
+  const micMutedRef = useRef(false);
   const audioSuspendedRef = useRef(false);
   const onPermissionStatusRef = useRef(onPermissionStatus);
 
@@ -80,25 +85,38 @@ export default function WebcamProctor({
 
   const isPrepareMode = mode === 'PREPARE';
 
-  const notifyPerms = useCallback((cam, mic, checking = false, error = '', audioSusp = audioSuspendedRef.current) => {
-    camGrantedRef.current = cam;
-    micGrantedRef.current = mic;
-    audioSuspendedRef.current = audioSusp;
-    setCamGranted(cam);
-    setMicGranted(mic);
-    setAudioSuspended(audioSusp);
-    setCheckingPerms(checking);
-    setCameraError(error);
-    if (onPermissionStatusRef.current) {
-      onPermissionStatusRef.current({
-        camGranted: cam,
-        micGranted: mic,
-        checking,
-        error,
-        audioSuspended: audioSusp,
-      });
-    }
-  }, []);
+  const notifyPerms = useCallback(
+    (
+      cam,
+      mic,
+      checking = false,
+      error = '',
+      audioSusp = audioSuspendedRef.current,
+      muted = micMutedRef.current
+    ) => {
+      camGrantedRef.current = cam;
+      micGrantedRef.current = mic;
+      audioSuspendedRef.current = audioSusp;
+      micMutedRef.current = muted;
+      setCamGranted(cam);
+      setMicGranted(mic);
+      setAudioSuspended(audioSusp);
+      setMicMuted(muted);
+      setCheckingPerms(checking);
+      setCameraError(error);
+      if (onPermissionStatusRef.current) {
+        onPermissionStatusRef.current({
+          camGranted: cam,
+          micGranted: mic,
+          checking,
+          error,
+          audioSuspended: audioSusp,
+          micMuted: muted,
+        });
+      }
+    },
+    []
+  );
 
   // Play synthesized warning beep using Web Audio API (Exam mode only)
   const playAlertSound = useCallback(() => {
@@ -331,6 +349,23 @@ export default function WebcamProctor({
       audioTrack.onended = () =>
         handleTrackRevoked('Microphone access was stopped or disconnected. Re-enable Camera & Mic.');
 
+      const syncMuteState = () => {
+        if (cancelled) return;
+        const isMutedNow = Boolean(audioTrack.muted);
+        if (micMutedRef.current !== isMutedNow) {
+          notifyPerms(
+            camGrantedRef.current,
+            micGrantedRef.current,
+            false,
+            '',
+            audioSuspendedRef.current,
+            isMutedNow
+          );
+        }
+      };
+      audioTrack.onmute = syncMuteState;
+      audioTrack.onunmute = syncMuteState;
+
       // Watch live browser permission revocations
       if (navigator.permissions?.query) {
         try {
@@ -352,9 +387,10 @@ export default function WebcamProctor({
       }
 
       const initialAudioSusp = Boolean(captureCtx && captureCtx.state !== 'running');
+      const initialMicMuted = Boolean(audioTrack.muted);
       streamRef.current = localStream;
       setStream(localStream);
-      notifyPerms(true, true, false, '', initialAudioSusp);
+      notifyPerms(true, true, false, '', initialAudioSusp, initialMicMuted);
 
       if (videoRef.current) {
         const vOnly = new MediaStream([videoTrack]);
@@ -373,28 +409,29 @@ export default function WebcamProctor({
           captureCtx.onstatechange = syncAudioState;
         }
 
-        const audioOnlyStream = new MediaStream([audioTrack]);
-        sourceNode = captureCtx.createMediaStreamSource(audioOnlyStream);
+        sourceNode = captureCtx.createMediaStreamSource(localStream);
         analyserNode = captureCtx.createAnalyser();
         analyserNode.fftSize = 1024;
+        analyserNodeRef.current = analyserNode;
         processorNode = captureCtx.createScriptProcessor(4096, 1, 1);
         silentGain = captureCtx.createGain();
         silentGain.gain.value = 0;
 
         processorNode.onaudioprocess = (ev) => {
           if (cancelled) return;
+          lastAudioProcessAtRef.current = Date.now();
           if (audioSuspendedRef.current) {
             syncAudioState();
           }
           const inputData = ev.inputBuffer.getChannelData(0);
 
-          // 1. Compute smooth RMS mic level
+          // 1. Compute smooth speech-sensitive RMS mic level
           let sumSq = 0;
           for (let i = 0; i < inputData.length; i++) {
             sumSq += inputData[i] * inputData[i];
           }
           const rms = Math.sqrt(sumSq / inputData.length);
-          const level = Math.min(100, Math.round(rms * 420));
+          const level = rms < 0.0004 ? 0 : Math.min(100, Math.round(Math.pow(rms, 0.72) * 180));
           micLevelRef.current = level;
           const nowTs = Date.now();
           if (nowTs - lastMicUiUpdateRef.current >= 180) {
@@ -487,8 +524,10 @@ export default function WebcamProctor({
         }
       }
       captureCtxRef.current = null;
+      analyserNodeRef.current = null;
       streamRef.current = null;
       hasConnectedRtcRef.current = false;
+      hasVerifiedRtcAudioRef.current = false;
       for (const entry of rtcPeers.values()) {
         try {
           entry.pc.close();
@@ -564,6 +603,29 @@ export default function WebcamProctor({
       if (!vTrack || vTrack.readyState !== 'live' || !aTrack || aTrack.readyState !== 'live') {
         notifyPerms(false, false, false, 'Camera or Microphone stopped. Both must remain active.');
         return;
+      }
+
+      const mutedNow = Boolean(aTrack.muted);
+      if (micMutedRef.current !== mutedNow) {
+        notifyPerms(true, true, false, '', audioSuspendedRef.current, mutedNow);
+      }
+
+      // Fallback RMS meter using AnalyserNode if ScriptProcessor callback hasn't fired recently
+      if (
+        captureCtxRef.current?.state === 'running' &&
+        analyserNodeRef.current &&
+        Date.now() - lastAudioProcessAtRef.current > 700
+      ) {
+        try {
+          const buf = new Float32Array(analyserNodeRef.current.fftSize);
+          analyserNodeRef.current.getFloatTimeDomainData(buf);
+          let sumSq = 0;
+          for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i];
+          const rms = Math.sqrt(sumSq / buf.length);
+          const lvl = rms < 0.0004 ? 0 : Math.min(100, Math.round(Math.pow(rms, 0.72) * 180));
+          micLevelRef.current = lvl;
+          setMicLevel(lvl);
+        } catch {}
       }
 
       const video = videoRef.current;
@@ -642,15 +704,28 @@ export default function WebcamProctor({
     let lastFrameSentAt = 0;
     let lastPingDurationMs = 0;
 
-    const refreshConnectedRtcFlag = () => {
+    const refreshConnectedRtcFlag = async () => {
       let anyConnected = false;
+      let anyAudioBytesSent = false;
       for (const entry of rtcPeersRef.current.values()) {
         if (entry.pc?.connectionState === 'connected') {
           anyConnected = true;
-          break;
+          try {
+            const stats = await entry.pc.getStats();
+            stats.forEach((report) => {
+              if (
+                report.type === 'outbound-rtp' &&
+                (report.kind === 'audio' || report.mediaType === 'audio') &&
+                Number(report.bytesSent || 0) > 0
+              ) {
+                anyAudioBytesSent = true;
+              }
+            });
+          } catch {}
         }
       }
       hasConnectedRtcRef.current = anyConnected;
+      hasVerifiedRtcAudioRef.current = anyConnected && anyAudioBytesSent;
     };
 
     const scheduleFastPing = () => {
@@ -777,13 +852,15 @@ export default function WebcamProctor({
       inFlight = true;
 
       const now = Date.now();
+      await refreshConnectedRtcFlag();
       const rtcConnected = hasConnectedRtcRef.current;
+      const rtcAudioVerified = hasVerifiedRtcAudioRef.current;
 
-      // When WebRTC is connected, WebRTC streams live Opus audio; avoid redundant HTTP PCM uploads
-      if (rtcConnected && audioQueueRef.current.length > 0) {
+      // Only skip HTTP PCM chunks once WebRTC outbound audio RTP packets are verified flowing
+      if (rtcAudioVerified && audioQueueRef.current.length > 0) {
         audioQueueRef.current = [];
       }
-      const audioChunks = rtcConnected ? [] : audioQueueRef.current.slice(0, 6);
+      const audioChunks = rtcAudioVerified ? [] : audioQueueRef.current.slice(0, 6);
       const shouldResetAudio = audioResetPendingRef.current;
 
       const outAnswers = rtcOutgoingRef.current.answers.slice(0, 4);
@@ -837,6 +914,8 @@ export default function WebcamProctor({
             rtcSignal,
             camGranted: camGrantedRef.current,
             micGranted: micGrantedRef.current,
+            micMuted: micMutedRef.current,
+            audioSuspended: audioSuspendedRef.current,
             isPresent: isPresentRef.current,
             webcamWarnings: warningCountRef.current,
           }),

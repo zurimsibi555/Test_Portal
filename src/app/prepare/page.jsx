@@ -35,6 +35,7 @@ export default function PreparePage() {
     checking: true,
     error: '',
     audioSuspended: false,
+    micMuted: false,
   });
   const [permRetryCount, setPermRetryCount] = useState(0);
   const [activeTabId, setActiveTabId] = useState(PREPARE_TOPICS[0].id); // topic.id | 'mcq-practice'
@@ -86,24 +87,8 @@ export default function PreparePage() {
         onPermissionStatus={setPermStatus}
       />
 
-      {/* Audio activation banner if browser autoplay policy paused AudioContext before first page click */}
-      {permStatus.camGranted && permStatus.micGranted && permStatus.audioSuspended && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-xs text-amber-900 flex flex-wrap items-center justify-center gap-2 z-30">
-          <Mic className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-          <span>
-            Browser paused microphone audio until page interaction. Click below to activate live mic monitoring.
-          </span>
-          <button
-            type="button"
-            className="px-3 py-1 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold text-[11px] transition"
-          >
-            Activate Mic Audio
-          </button>
-        </div>
-      )}
-
-      {/* MANDATORY CAMERA & MICROPHONE GATE IN PREPARE MODE */}
-      {(!permStatus.camGranted || !permStatus.micGranted) && (
+      {/* MANDATORY CAMERA & MICROPHONE GATE IN PREPARE MODE (also ensures AudioContext is unlocked by user click) */}
+      {(!permStatus.camGranted || !permStatus.micGranted || permStatus.audioSuspended || permStatus.micMuted) && (
         <div className="fixed inset-0 z-50 bg-stone-900/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-white border-2 border-emerald-700 rounded-3xl p-7 shadow-2xl text-center space-y-5">
             <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center mx-auto">
@@ -115,11 +100,19 @@ export default function PreparePage() {
                 Mandatory Proctoring Access
               </span>
               <h2 className="text-xl font-black text-stone-900">
-                Camera &amp; Microphone Required
+                {permStatus.camGranted && permStatus.micGranted && permStatus.micMuted
+                  ? 'Microphone Is Muted on Device'
+                  : permStatus.camGranted && permStatus.micGranted && permStatus.audioSuspended
+                  ? 'Activate Live Microphone & Start'
+                  : 'Camera & Microphone Required'}
               </h2>
               <p className="text-xs text-stone-600 leading-relaxed">
                 {permStatus.checking
                   ? 'Requesting Camera & Microphone permissions. Please click "Allow" in the browser popup...'
+                  : permStatus.camGranted && permStatus.micGranted && permStatus.micMuted
+                  ? 'Your microphone is currently muted at the OS/hardware level or in use by another app. Please unmute your microphone to continue.'
+                  : permStatus.camGranted && permStatus.micGranted && permStatus.audioSuspended
+                  ? 'Camera & Microphone permissions are granted! Click the button below once to activate live audio monitoring and enter Preparation Mode.'
                   : permStatus.error ||
                     'You must grant both Camera and Microphone permissions to access Preparation Mode.'}
               </p>
@@ -138,37 +131,59 @@ export default function PreparePage() {
               </div>
               <div
                 className={`p-3 rounded-xl border flex items-center justify-center gap-2 font-bold ${
-                  permStatus.micGranted
+                  permStatus.micGranted && !permStatus.micMuted
                     ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                     : 'bg-rose-50 border-rose-200 text-rose-800'
                 }`}
               >
                 <Mic className="w-4 h-4" />
-                <span>{permStatus.micGranted ? 'Mic Allowed' : 'Mic Required'}</span>
+                <span>
+                  {!permStatus.micGranted
+                    ? 'Mic Required'
+                    : permStatus.micMuted
+                    ? 'Mic Muted'
+                    : 'Mic Allowed'}
+                </span>
               </div>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-[#FAF8F5] border border-stone-200 text-[11px] text-stone-600 text-left space-y-1">
-              <div className="font-bold text-stone-800">If you clicked Block/Deny earlier:</div>
-              <p>
-                Click the <strong>Lock / Camera icon</strong> next to the website URL, change{' '}
-                <strong>Camera</strong> &amp; <strong>Microphone</strong> to <strong>Allow</strong>,
-                then click the button below.
-              </p>
-            </div>
+            {(!permStatus.camGranted || !permStatus.micGranted) && (
+              <div className="p-3.5 rounded-2xl bg-[#FAF8F5] border border-stone-200 text-[11px] text-stone-600 text-left space-y-1">
+                <div className="font-bold text-stone-800">If you clicked Block/Deny earlier:</div>
+                <p>
+                  Click the <strong>Lock / Camera icon</strong> next to the website URL, change{' '}
+                  <strong>Camera</strong> &amp; <strong>Microphone</strong> to <strong>Allow</strong>,
+                  then click the button below.
+                </p>
+              </div>
+            )}
 
             <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                disabled={permStatus.checking}
-                onClick={() => setPermRetryCount((c) => c + 1)}
-                className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                <RefreshCw className={`w-4 h-4 ${permStatus.checking ? 'animate-spin' : ''}`} />
-                <span>
-                  {permStatus.checking ? 'Checking Permissions...' : 'Allow Camera & Microphone'}
-                </span>
-              </button>
+              {permStatus.camGranted && permStatus.micGranted && permStatus.audioSuspended && !permStatus.micMuted ? (
+                <button
+                  type="button"
+                  className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center gap-2"
+                >
+                  <Mic className="w-4 h-4" />
+                  <span>Start Preparation &amp; Activate Mic</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={permStatus.checking}
+                  onClick={() => setPermRetryCount((c) => c + 1)}
+                  className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  <RefreshCw className={`w-4 h-4 ${permStatus.checking ? 'animate-spin' : ''}`} />
+                  <span>
+                    {permStatus.checking
+                      ? 'Checking Permissions...'
+                      : permStatus.micMuted
+                      ? 'Re-Check Microphone'
+                      : 'Allow Camera & Microphone'}
+                  </span>
+                </button>
+              )}
               <Link
                 href="/"
                 className="text-xs text-stone-500 hover:text-emerald-700 font-medium py-1"

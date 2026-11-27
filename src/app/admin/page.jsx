@@ -11,27 +11,43 @@ import { RTC_ICE_SERVERS } from '@/lib/webrtcConfig';
 
 function RtcLiveVideo({ stream, muted }) {
   const videoElRef = useRef(null);
+  const audioElRef = useRef(null);
 
   useEffect(() => {
-    const el = videoElRef.current;
-    if (!el || !stream) return;
-    if (el.srcObject !== stream) {
-      el.srcObject = stream;
+    const vEl = videoElRef.current;
+    if (vEl && stream) {
+      if (vEl.srcObject !== stream) {
+        vEl.srcObject = stream;
+      }
+      vEl.muted = true;
+      vEl.play?.().catch(() => {});
     }
-    el.muted = muted;
-    el.volume = 1;
-    el.play?.().catch(() => {});
+
+    const aEl = audioElRef.current;
+    if (aEl && stream) {
+      if (aEl.srcObject !== stream) {
+        aEl.srcObject = stream;
+      }
+      aEl.muted = muted;
+      aEl.volume = 1;
+      if (!muted) {
+        aEl.play?.().catch(() => {});
+      }
+    }
   }, [stream, muted]);
 
   return (
-    <video
-      ref={videoElRef}
-      autoPlay
-      playsInline
-      muted={muted}
-      disablePictureInPicture
-      className="w-full h-full object-cover"
-    />
+    <>
+      <video
+        ref={videoElRef}
+        autoPlay
+        playsInline
+        muted
+        disablePictureInPicture
+        className="w-full h-full object-cover"
+      />
+      <audio ref={audioElRef} autoPlay playsInline muted={muted} className="hidden" />
+    </>
   );
 }
 
@@ -287,7 +303,7 @@ export default function AdminPage() {
       compressor.release.setValueAtTime(0.15, ctx.currentTime);
 
       const gain = ctx.createGain();
-      gain.gain.value = 1.15;
+      gain.gain.value = 2.2;
       compressor.connect(gain);
       gain.connect(ctx.destination);
 
@@ -444,7 +460,11 @@ export default function AdminPage() {
             if (ev.track && !remoteStream.getTracks().some((t) => t.id === ev.track.id)) {
               remoteStream.addTrack(ev.track);
             }
-            setRtcRemoteStreams((prev) => ({ ...prev, [sid]: remoteStream }));
+            // Emit fresh MediaStream wrapper so RtcLiveVideo re-attaches when audio track arrives after video
+            setRtcRemoteStreams((prev) => ({
+              ...prev,
+              [sid]: new MediaStream(remoteStream.getTracks()),
+            }));
           };
 
           pc.onicecandidate = (ev) => {
@@ -1131,18 +1151,30 @@ export default function AdminPage() {
 
                       {/* Microphone Meter & Controls */}
                       <div className="p-2.5 rounded-xl bg-[#FAF8F5] border border-stone-200 space-y-2">
-                        <div className="flex items-center justify-between text-[11px]">
+                        <div className="flex items-center justify-between text-[11px] gap-1">
                           <span className="flex items-center gap-1 font-semibold text-stone-700">
-                            {feed.micGranted ? (
+                            {feed.micGranted && !feed.micMuted ? (
                               <Mic className="w-3.5 h-3.5 text-emerald-700" />
                             ) : (
                               <MicOff className="w-3.5 h-3.5 text-rose-600" />
                             )}
                             Mic Level: {feed.audioLevel || 0}%
                           </span>
-                          <span className="text-[10px] text-stone-500">
-                            Warnings: {feed.webcamWarnings || 0}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {feed.micMuted && (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[9px] font-bold">
+                                OS Muted
+                              </span>
+                            )}
+                            {!feed.micMuted && feed.audioSuspended && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold">
+                                Waiting Click
+                              </span>
+                            )}
+                            <span className="text-[10px] text-stone-500">
+                              Warnings: {feed.webcamWarnings || 0}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="w-full h-2 bg-stone-200 rounded-full overflow-hidden">

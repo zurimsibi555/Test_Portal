@@ -18,6 +18,8 @@ export async function POST(req) {
       rtcSignal,
       camGranted,
       micGranted,
+      micMuted,
+      audioSuspended,
       isPresent,
       webcamWarnings,
     } = body;
@@ -42,6 +44,8 @@ export async function POST(req) {
       rtcSignal,
       camGranted,
       micGranted,
+      micMuted,
+      audioSuspended,
       isPresent,
       webcamWarnings,
     });
