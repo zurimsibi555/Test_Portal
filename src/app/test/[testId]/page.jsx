@@ -59,7 +59,7 @@ function TestContent() {
   const [mcqAnswers, setMcqAnswers] = useState({});
   const [codingSolutions, setCodingSolutions] = useState({});
   const [codingEvaluations, setCodingEvaluations] = useState({});
-  const [remainingSeconds, setRemainingSeconds] = useState(45 * 60);
+  const [remainingSeconds, setRemainingSeconds] = useState(120 * 60);
 
   // Violation & Submission confirmation (no scores shown to student)
   const [violationReason, setViolationReason] = useState('');
@@ -149,7 +149,7 @@ function TestContent() {
           const mcqs = data.mcqQuestions.filter((q) => q.testId === test.id);
           const coding = data.codingQuestions.filter((q) => q.testId === test.id);
           setTestData({ ...test, mcqs, coding });
-          setRemainingSeconds((test.durationMinutes || 45) * 60);
+          setRemainingSeconds((test.durationMinutes || 120) * 60);
           if (hasCompletedCurrentExam(test, data.submissionCount, serverNow)) {
             setAlreadyAttended(true);
           }
@@ -235,12 +235,15 @@ function TestContent() {
     return () => clearInterval(pollingRef.current);
   }, [session?.id, isMobilePaired, stage, handleViolation]);
 
+  const submittingRef = useRef(false);
   const handleSubmitTest = useCallback(
     async (autoReason = null) => {
+      if (submittingRef.current) return;
       if (!autoReason && !confirm('Are you sure you want to finish and submit the test?')) {
         return;
       }
       if (!session?.id) return;
+      submittingRef.current = true;
 
       try {
         const res = await fetch(`/api/session/${session.id}`, {
@@ -261,8 +264,11 @@ function TestContent() {
           if (document.fullscreenElement) {
             document.exitFullscreen().catch(() => {});
           }
+        } else {
+          submittingRef.current = false;
         }
       } catch (err) {
+        submittingRef.current = false;
         alert(`Submission error: ${err.message}`);
       }
     },

@@ -51,7 +51,7 @@ export default function Home() {
                   title: 'Java Foundation Test',
                   description:
                     'Official Core Java, OOPs concepts, and Problem Solving examination.',
-                  durationMinutes: 45,
+                  durationMinutes: 120,
                   scheduledStartTime: '2026-11-28T13:00:00+05:30',
                   entryWindowMinutes: 30,
                   alwaysOpen: false,
@@ -81,7 +81,7 @@ export default function Home() {
     id: 'demo-java-test',
     title: 'Java Foundation Test',
     description: 'Official Core Java, OOPs concepts, and Problem Solving examination.',
-    durationMinutes: 45,
+    durationMinutes: 120,
     scheduledStartTime: '2026-11-28T13:00:00+05:30',
     entryWindowMinutes: 30,
     alwaysOpen: false,
@@ -312,7 +312,7 @@ export default function Home() {
               <div className="flex flex-col items-end gap-1.5 shrink-0">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#FAF8F5] border border-stone-200 text-stone-800 font-mono text-xs font-bold shadow-xs">
                   <Clock className="w-3.5 h-3.5 text-amber-700" />
-                  {primaryTest.durationMinutes || 45} Minutes
+                  {primaryTest.durationMinutes || 120} Minutes
                 </span>
                 <span className="text-[10px] font-semibold text-stone-500">
                   {isUpcoming

@@ -49,7 +49,7 @@ export async function POST(req) {
         id: `test_${Date.now()}`,
         title,
         description: description || '',
-        durationMinutes: parseInt(durationMinutes, 10) || 60,
+        durationMinutes: parseInt(durationMinutes, 10) || 120,
         scheduledStartTime: scheduledStartTime || '2026-11-28T13:00:00+05:30',
         entryWindowMinutes: parseInt(entryWindowMinutes, 10) || 30,
         isActive: true,
@@ -115,7 +115,7 @@ export async function PATCH(req) {
     }
     if (scheduledStartTime) test.scheduledStartTime = scheduledStartTime;
     if (entryWindowMinutes !== undefined) test.entryWindowMinutes = parseInt(entryWindowMinutes, 10) || 30;
-    if (durationMinutes !== undefined) test.durationMinutes = parseInt(durationMinutes, 10) || 45;
+    if (durationMinutes !== undefined) test.durationMinutes = parseInt(durationMinutes, 10) || 120;
     if (alwaysOpen !== undefined) test.alwaysOpen = Boolean(alwaysOpen);
     saveStore(store);
     return NextResponse.json({ success: true, test });

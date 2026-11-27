@@ -154,7 +154,14 @@ export function generateSubmissionPdfBuffer(submission) {
         `Q${item.questionNumber || index + 1}. ${sanitizeText(item.question)}`,
         contentWidth - 20
       );
-      const blockHeight = 28 + qLines.length * 12 + 22;
+      const selectedLabel =
+        item.selectedOption !== null && item.selectedOption !== undefined
+          ? `${String.fromCharCode(65 + item.selectedOption)}) ${sanitizeText(item.options?.[item.selectedOption] ?? '')}`
+          : 'Not Answered';
+      const correctLabel = `${String.fromCharCode(65 + item.correctOption)}) ${sanitizeText(item.options?.[item.correctOption] ?? '')}`;
+      const selectedLines = doc.splitTextToSize(`Student Answer: ${selectedLabel}`, contentWidth - 85);
+      const correctLines = doc.splitTextToSize(`Correct Answer: ${correctLabel}`, contentWidth - 24);
+      const blockHeight = 20 + qLines.length * 12 + selectedLines.length * 11 + correctLines.length * 11 + 14;
       ensureSpace(blockHeight);
 
       doc.setFillColor(250, 248, 245);
@@ -167,22 +174,19 @@ export function generateSubmissionPdfBuffer(submission) {
       doc.text(qLines, margin + 10, y + 15);
 
       const answerY = y + 15 + qLines.length * 12 + 4;
-      const selectedLabel =
-        item.selectedOption !== null && item.selectedOption !== undefined
-          ? `${String.fromCharCode(65 + item.selectedOption)}) ${sanitizeText(item.options?.[item.selectedOption] ?? '')}`
-          : 'Not Answered';
-      const correctLabel = `${String.fromCharCode(65 + item.correctOption)}) ${sanitizeText(item.options?.[item.correctOption] ?? '')}`;
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
       doc.setTextColor(item.isCorrect ? 21 : 185, item.isCorrect ? 128 : 28, item.isCorrect ? 61 : 28);
-      doc.text(`Student Answer: ${selectedLabel.slice(0, 62)}`, margin + 10, answerY);
-
-      doc.setTextColor(87, 83, 78);
-      doc.text(`Correct: ${correctLabel.slice(0, 52)}`, margin + 250, answerY);
+      doc.text(selectedLines, margin + 10, answerY);
 
       doc.setFont('helvetica', 'bold');
       doc.text(`${item.marksAwarded} / ${item.maxMarks}`, pageWidth - margin - 10, answerY, { align: 'right' });
+
+      const correctY = answerY + selectedLines.length * 11 + 2;
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(87, 83, 78);
+      doc.text(correctLines, margin + 10, correctY);
 
       y += blockHeight;
     });
@@ -200,8 +204,8 @@ export function generateSubmissionPdfBuffer(submission) {
     y += 18;
 
     submission.codingDetails.forEach((prob, index) => {
-      const codePreview = sanitizeText(prob.code || '// No code submitted').slice(0, 900);
-      const codeLines = doc.splitTextToSize(codePreview, contentWidth - 24).slice(0, 18);
+      const codePreview = sanitizeText(prob.code || '// No code submitted').slice(0, 3500);
+      const codeLines = doc.splitTextToSize(codePreview, contentWidth - 24).slice(0, 45);
       const boxH = 44 + codeLines.length * 10 + 14;
       ensureSpace(boxH);
 

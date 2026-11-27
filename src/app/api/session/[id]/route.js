@@ -64,7 +64,7 @@ export async function POST(req, { params }) {
       const testMcqs = store.mcqQuestions.filter((q) => q.testId === session.testId);
       const testCodings = store.codingQuestions.filter((q) => q.testId === session.testId);
       const mcqMaxScore = testMcqs.reduce((acc, q) => acc + Number(q.points ?? 2.5), 0);
-      const codeMaxScore = testCodings.reduce((acc, q) => acc + Number(q.points ?? 10), 0);
+      const codeMaxScore = testCodings.reduce((acc, q) => acc + Number(q.points ?? 5), 0);
 
       const violationSub = {
         id: `sub_${Date.now()}`,
@@ -136,7 +136,7 @@ export async function POST(req, { params }) {
         };
       });
 
-      // Coding points passed in or auto-evaluated (10 marks per problem by default)
+      // Coding points passed in or auto-evaluated (5 marks per problem by default)
       const testCodings = store.codingQuestions.filter((q) => q.testId === session.testId);
       let codeScore = 0;
       let codeMaxScore = 0;
@@ -150,12 +150,18 @@ export async function POST(req, { params }) {
             if (question) {
               const tCases = question.testCases || question.test_cases || [];
               if (tCases.length > 0) {
-                const evalRes = await evaluateJavaTestSuite(code, tCases);
-                const passedTests = (evalRes.results || []).filter((r) => r.passed).length;
-                const maxPoints = Number(question.points ?? 10);
-                const score =
-                  tCases.length > 0 ? Math.round((passedTests / tCases.length) * maxPoints) : 0;
-                evaluatedCoding[qId] = { score, passedTests, totalTests: tCases.length };
+                try {
+                  const evalRes = await evaluateJavaTestSuite(code, tCases);
+                  const passedTests = (evalRes.results || []).filter((r) => r.passed).length;
+                  const maxPoints = Number(question.points ?? 5);
+                  const score =
+                    tCases.length > 0
+                      ? Number(((passedTests / tCases.length) * maxPoints).toFixed(2))
+                      : 0;
+                  evaluatedCoding[qId] = { score, passedTests, totalTests: tCases.length };
+                } catch {
+                  evaluatedCoding[qId] = { score: 0, passedTests: 0, totalTests: tCases.length };
+                }
               }
             }
           }
@@ -163,7 +169,7 @@ export async function POST(req, { params }) {
       }
 
       const codingDetails = testCodings.map((q, idx) => {
-        const maxMarks = Number(q.points ?? 10);
+        const maxMarks = Number(q.points ?? 5);
         codeMaxScore += maxMarks;
         const evalData = evaluatedCoding[q.id] || {};
         const marksAwarded = Number(evalData.score ?? 0);

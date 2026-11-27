@@ -54,8 +54,8 @@ export async function POST(req) {
 
     const totalTests = testCases.length;
     const passedCount = (evalResult.results || []).filter((r) => r.passed).length;
-    const maxPoints = question.points || 10;
-    const score = totalTests > 0 ? Math.round((passedCount / totalTests) * maxPoints) : 0;
+    const maxPoints = Number(question.points ?? 5);
+    const score = totalTests > 0 ? Number(((passedCount / totalTests) * maxPoints).toFixed(2)) : 0;
 
     return NextResponse.json({
       success: true,

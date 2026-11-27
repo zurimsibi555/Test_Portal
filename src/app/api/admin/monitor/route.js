@@ -69,7 +69,7 @@ export async function POST(req) {
         const testMcqs = store.mcqQuestions.filter((q) => q.testId === session.testId);
         const testCodings = store.codingQuestions.filter((q) => q.testId === session.testId);
         const mcqMaxScore = testMcqs.reduce((acc, q) => acc + Number(q.points ?? 2.5), 0);
-        const codeMaxScore = testCodings.reduce((acc, q) => acc + Number(q.points ?? 10), 0);
+        const codeMaxScore = testCodings.reduce((acc, q) => acc + Number(q.points ?? 5), 0);
 
         const sub = {
           id: `sub_${Date.now()}`,

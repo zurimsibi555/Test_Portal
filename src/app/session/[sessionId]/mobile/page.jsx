@@ -48,7 +48,7 @@ function MobileSessionContent() {
         if (pairData.success) {
           setSession(pairData.session);
           setIsPaired(true);
-          setRemainingSeconds(pairData.session.remainingSeconds || 2700);
+          setRemainingSeconds(pairData.session.remainingSeconds || 7200);
         }
       } catch (err) {
         console.error('Pairing error', err);

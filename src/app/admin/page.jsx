@@ -31,7 +31,7 @@ export default function AdminPage() {
   const knownFramesRef = useRef({});
 
   // Form states
-  const [testForm, setTestForm] = useState({ title: '', description: '', durationMinutes: 45 });
+  const [testForm, setTestForm] = useState({ title: '', description: '', durationMinutes: 120 });
   const [selectedTestId, setSelectedTestId] = useState('');
   
   const [mcqForm, setMcqForm] = useState({
@@ -150,7 +150,7 @@ export default function AdminPage() {
       const resData = await res.json();
       if (resData.success) {
         setFeedback({ type: 'success', message: `Test "${testForm.title}" created successfully!` });
-        setTestForm({ title: '', description: '', durationMinutes: 45 });
+        setTestForm({ title: '', description: '', durationMinutes: 120 });
         fetchData();
       } else {
         setFeedback({ type: 'error', message: resData.message });
