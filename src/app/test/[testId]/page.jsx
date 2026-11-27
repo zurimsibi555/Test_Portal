@@ -28,7 +28,12 @@ import CodeEditor from '@/components/CodeEditor';
 import AntiCheatGuard from '@/components/AntiCheatGuard';
 import WebcamProctor from '@/components/WebcamProctor';
 import Link from 'next/link';
-import { getExamScheduleStatus, formatCountdown } from '@/lib/examSchedule';
+import {
+  getExamScheduleStatus,
+  formatCountdown,
+  hasCompletedCurrentExam,
+  markExamCompleted,
+} from '@/lib/examSchedule';
 
 function TestContent() {
   const params = useParams();
@@ -62,6 +67,7 @@ function TestContent() {
   const [loginError, setLoginError] = useState('');
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [alreadyAttended, setAlreadyAttended] = useState(false);
+  const clockOffsetRef = useRef(0);
   const [preflightPerms, setPreflightPerms] = useState({
     camGranted: false,
     micGranted: false,
@@ -123,7 +129,7 @@ function TestContent() {
   }, [stage, verifyCamAndMic]);
 
   useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    const t = setInterval(() => setNowMs(Date.now() + clockOffsetRef.current), 1000);
     return () => clearInterval(t);
   }, []);
 
@@ -133,16 +139,19 @@ function TestContent() {
       try {
         const res = await fetch('/api/admin/manage', { cache: 'no-store' });
         const data = await res.json();
+        const serverNow =
+          typeof data.serverTimeMs === 'number' ? data.serverTimeMs : Date.now();
+        clockOffsetRef.current = serverNow - Date.now();
+        setNowMs(serverNow);
+
         if (data.success) {
           const test = data.tests.find((t) => t.id === testId) || data.tests[0];
           const mcqs = data.mcqQuestions.filter((q) => q.testId === test.id);
           const coding = data.codingQuestions.filter((q) => q.testId === test.id);
           setTestData({ ...test, mcqs, coding });
           setRemainingSeconds((test.durationMinutes || 45) * 60);
-          if (typeof window !== 'undefined' && test?.id && !test.alwaysOpen) {
-            if (localStorage.getItem(`exam_completed_${test.id}`)) {
-              setAlreadyAttended(true);
-            }
+          if (hasCompletedCurrentExam(test, data.submissionCount, serverNow)) {
+            setAlreadyAttended(true);
           }
         }
       } catch (err) {
@@ -183,9 +192,7 @@ function TestContent() {
     async (reason) => {
       setViolationReason(reason);
       setStage('DISQUALIFIED');
-      if (typeof window !== 'undefined' && testData?.id) {
-        localStorage.setItem(`exam_completed_${testData.id}`, 'DISQUALIFIED');
-      }
+      markExamCompleted(testData, 'DISQUALIFIED');
 
       if (session?.id) {
         try {
@@ -249,9 +256,7 @@ function TestContent() {
         const data = await res.json();
         if (data.success) {
           setSubmissionId(data.submissionId || null);
-          if (typeof window !== 'undefined' && testData?.id) {
-            localStorage.setItem(`exam_completed_${testData.id}`, 'SUBMITTED');
-          }
+          markExamCompleted(testData, 'SUBMITTED');
           setStage('SUBMITTED');
           if (document.fullscreenElement) {
             document.exitFullscreen().catch(() => {});

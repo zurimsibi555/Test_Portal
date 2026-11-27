@@ -60,3 +60,54 @@ export function formatCountdown(ms) {
   }
   return `${hh}:${mm}:${ss}`;
 }
+
+/**
+ * Checks whether the current browser has already completed THIS scheduled exam window.
+ * Automatically clears stale localStorage locks from earlier manual testing or cleared reports.
+ */
+export function hasCompletedCurrentExam(test, submissionCount, nowMs = Date.now()) {
+  if (typeof window === 'undefined' || !test?.id || test.alwaysOpen) return false;
+  const key = `exam_completed_${test.id}`;
+  const raw = localStorage.getItem(key);
+  if (!raw) return false;
+
+  if (typeof submissionCount === 'number' && submissionCount === 0) {
+    localStorage.removeItem(key);
+    return false;
+  }
+
+  const schedule = getExamScheduleStatus(test, nowMs);
+  if (schedule.status === 'UPCOMING') {
+    localStorage.removeItem(key);
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed.at === 'number' &&
+      parsed.at >= schedule.startMs &&
+      parsed.startIso === schedule.startIso
+    ) {
+      return true;
+    }
+  } catch {
+    // Legacy plain-string lock from earlier testing: clear it
+  }
+
+  localStorage.removeItem(key);
+  return false;
+}
+
+export function markExamCompleted(test, status) {
+  if (typeof window === 'undefined' || !test?.id) return;
+  localStorage.setItem(
+    `exam_completed_${test.id}`,
+    JSON.stringify({
+      status,
+      at: Date.now(),
+      startIso: test.scheduledStartTime || DEFAULT_EXAM_START_ISO,
+    })
+  );
+}

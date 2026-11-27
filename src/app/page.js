@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   ShieldCheck,
@@ -18,7 +18,11 @@ import {
   Mic,
   CalendarClock,
 } from 'lucide-react';
-import { getExamScheduleStatus, formatCountdown } from '@/lib/examSchedule';
+import {
+  getExamScheduleStatus,
+  formatCountdown,
+  hasCompletedCurrentExam,
+} from '@/lib/examSchedule';
 
 export default function Home() {
   const [tests, setTests] = useState([]);
@@ -26,12 +30,18 @@ export default function Home() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [showExamPopup, setShowExamPopup] = useState(true);
   const [alreadyAttended, setAlreadyAttended] = useState(false);
+  const clockOffsetRef = useRef(0);
 
   useEffect(() => {
     async function fetchTests() {
       try {
         const res = await fetch('/api/admin/manage', { cache: 'no-store' });
         const data = await res.json();
+        const serverNow =
+          typeof data.serverTimeMs === 'number' ? data.serverTimeMs : Date.now();
+        clockOffsetRef.current = serverNow - Date.now();
+        setNowMs(serverNow);
+
         const loadedTests =
           data.success && data.tests?.length > 0
             ? data.tests
@@ -49,11 +59,8 @@ export default function Home() {
               ];
         setTests(loadedTests);
         const firstTest = loadedTests[0];
-        if (typeof window !== 'undefined' && firstTest?.id && !firstTest.alwaysOpen) {
-          const status = localStorage.getItem(`exam_completed_${firstTest.id}`);
-          if (status) {
-            setAlreadyAttended(true);
-          }
+        if (hasCompletedCurrentExam(firstTest, data.submissionCount, serverNow)) {
+          setAlreadyAttended(true);
         }
       } catch (err) {
         console.error(err);
@@ -64,9 +71,9 @@ export default function Home() {
     fetchTests();
   }, []);
 
-  // Live 1-second clock for schedule popup & 30-min expiry window
+  // Live 1-second server-synced clock for schedule popup & 30-min expiry window
   useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    const timer = setInterval(() => setNowMs(Date.now() + clockOffsetRef.current), 1000);
     return () => clearInterval(timer);
   }, []);
 

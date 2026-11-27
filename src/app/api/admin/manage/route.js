@@ -13,6 +13,8 @@ export async function GET(req) {
       {
         success: true,
         isAdmin,
+        serverTimeMs: Date.now(),
+        submissionCount: Array.isArray(store.submissions) ? store.submissions.length : 0,
         tests: store.tests,
         mcqQuestions: store.mcqQuestions,
         codingQuestions: store.codingQuestions,
