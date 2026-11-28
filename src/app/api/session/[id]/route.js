@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getStore, saveStore } from '@/lib/store';
-import { evaluateJavaTestSuite } from '@/lib/javaCompiler';
+import { gradeAttemptedAnswers } from '@/lib/gradeSubmission';
 import { saveSubmissionPdf } from '@/lib/pdfReport';
 
 export async function GET(req, { params }) {
@@ -51,7 +51,26 @@ export async function POST(req, { params }) {
       return NextResponse.json({ success: true, webcamWarnings: session.webcamWarnings, session });
     }
 
-    // 2. Anti-cheat Violation Action (Triggered by either Mobile or Desktop)
+    // 1.6 Sync In-Progress Draft Answers (preserves work in case of mobile/admin/shortcut auto-submit)
+    if (action === 'sync_draft') {
+      if (session.isSubmitted) {
+        return NextResponse.json({ success: true, alreadySubmitted: true });
+      }
+      if (mcqAnswers && typeof mcqAnswers === 'object') {
+        session.draftMcqAnswers = mcqAnswers;
+      }
+      if (codingAnswers && typeof codingAnswers === 'object') {
+        session.draftCodingAnswers = codingAnswers;
+      }
+      if (codingSolutions && typeof codingSolutions === 'object') {
+        session.draftCodingSolutions = codingSolutions;
+      }
+      session.lastDraftSyncAt = new Date().toISOString();
+      saveStore(store);
+      return NextResponse.json({ success: true });
+    }
+
+    // 2. Anti-cheat Violation Action (Triggered by either Mobile or Desktop) — grades all attempted answers
     if (action === 'violation') {
       if (session.isSubmitted) {
         return NextResponse.json({ success: true, alreadySubmitted: true, message: 'Session already submitted.' });
@@ -61,10 +80,11 @@ export async function POST(req, { params }) {
       session.isSubmitted = true;
 
       const test = store.tests.find((t) => t.id === session.testId);
-      const testMcqs = store.mcqQuestions.filter((q) => q.testId === session.testId);
-      const testCodings = store.codingQuestions.filter((q) => q.testId === session.testId);
-      const mcqMaxScore = testMcqs.reduce((acc, q) => acc + Number(q.points ?? 2.5), 0);
-      const codeMaxScore = testCodings.reduce((acc, q) => acc + Number(q.points ?? 5), 0);
+      const graded = await gradeAttemptedAnswers(store, session, {
+        mcqAnswers,
+        codingAnswers,
+        codingSolutions,
+      });
 
       const violationSub = {
         id: `sub_${Date.now()}`,
@@ -77,14 +97,20 @@ export async function POST(req, { params }) {
         violationReason: session.violationReason,
         webcamWarnings: session.webcamWarnings || 0,
         submittedAt: new Date().toISOString(),
-        mcqScore: 0,
-        mcqMaxScore,
-        codeScore: 0,
-        codeMaxScore,
-        totalScore: 0,
-        totalMaxScore: mcqMaxScore + codeMaxScore,
-        score: 0,
+        mcqScore: graded.mcqScore,
+        mcqMaxScore: graded.mcqMaxScore,
+        codeScore: graded.codeScore,
+        codeMaxScore: graded.codeMaxScore,
+        totalScore: graded.totalScore,
+        totalMaxScore: graded.totalMaxScore,
+        score: graded.totalScore,
+        mcqAttemptedCount: graded.mcqAttemptedCount,
+        totalMcqs: graded.totalMcqs,
+        codingAttemptedCount: graded.codingAttemptedCount,
+        totalCodings: graded.totalCodings,
         status: 'DISQUALIFIED / AUTO_SUBMITTED',
+        mcqDetails: graded.mcqDetails,
+        codingDetails: graded.codingDetails,
         sentToStudent: false,
       };
 
@@ -96,11 +122,11 @@ export async function POST(req, { params }) {
         console.error('PDF generation failed for violation:', pdfErr);
       }
 
-      // Auto-save submission with penalty/flag
+      // Auto-save submission with violation flag + actual graded work
       store.submissions.push(violationSub);
 
       saveStore(store);
-      return NextResponse.json({ success: true, message: 'Violation recorded. Test terminated.' });
+      return NextResponse.json({ success: true, message: 'Violation recorded. Test auto-submitted with attempted answers.' });
     }
 
     // 3. Normal Submission
@@ -110,86 +136,11 @@ export async function POST(req, { params }) {
       }
       session.isSubmitted = true;
       const test = store.tests.find((t) => t.id === session.testId);
-
-      // Calculate MCQ Score (2.5 marks per MCQ by default)
-      const testMcqs = store.mcqQuestions.filter((q) => q.testId === session.testId);
-      let mcqScore = 0;
-      let mcqMaxScore = 0;
-      const mcqDetails = testMcqs.map((q, idx) => {
-        const maxMarks = Number(q.points ?? 2.5);
-        mcqMaxScore += maxMarks;
-        const selectedOption =
-          mcqAnswers && mcqAnswers[q.id] !== undefined ? mcqAnswers[q.id] : null;
-        const isCorrect = selectedOption === q.correctOption;
-        const marksAwarded = isCorrect ? maxMarks : 0;
-        mcqScore += marksAwarded;
-        return {
-          questionId: q.id,
-          questionNumber: idx + 1,
-          question: q.question,
-          options: q.options,
-          selectedOption,
-          correctOption: q.correctOption,
-          isCorrect,
-          marksAwarded,
-          maxMarks,
-        };
+      const graded = await gradeAttemptedAnswers(store, session, {
+        mcqAnswers,
+        codingAnswers,
+        codingSolutions,
       });
-
-      // Coding points passed in or auto-evaluated (5 marks per problem by default)
-      const testCodings = store.codingQuestions.filter((q) => q.testId === session.testId);
-      let codeScore = 0;
-      let codeMaxScore = 0;
-      const evaluatedCoding = { ...(codingAnswers || {}) };
-
-      // Auto-evaluate any written solutions that were not evaluated yet
-      if (codingSolutions && store.codingQuestions) {
-        for (const [qId, code] of Object.entries(codingSolutions)) {
-          if (code && (!evaluatedCoding[qId] || evaluatedCoding[qId].score === undefined)) {
-            const question = store.codingQuestions.find((q) => q.id === qId);
-            if (question) {
-              const tCases = question.testCases || question.test_cases || [];
-              if (tCases.length > 0) {
-                try {
-                  const evalRes = await evaluateJavaTestSuite(code, tCases);
-                  const passedTests = (evalRes.results || []).filter((r) => r.passed).length;
-                  const maxPoints = Number(question.points ?? 5);
-                  const score =
-                    tCases.length > 0
-                      ? Number(((passedTests / tCases.length) * maxPoints).toFixed(2))
-                      : 0;
-                  evaluatedCoding[qId] = { score, passedTests, totalTests: tCases.length };
-                } catch {
-                  evaluatedCoding[qId] = { score: 0, passedTests: 0, totalTests: tCases.length };
-                }
-              }
-            }
-          }
-        }
-      }
-
-      const codingDetails = testCodings.map((q, idx) => {
-        const maxMarks = Number(q.points ?? 5);
-        codeMaxScore += maxMarks;
-        const evalData = evaluatedCoding[q.id] || {};
-        const marksAwarded = Number(evalData.score ?? 0);
-        codeScore += marksAwarded;
-        return {
-          questionId: q.id,
-          questionNumber: idx + 1,
-          title: q.title,
-          code: codingSolutions?.[q.id] || '',
-          passedTests: evalData.passedTests ?? 0,
-          totalTests: evalData.totalTests ?? (q.testCases || q.test_cases || []).length,
-          marksAwarded,
-          maxMarks,
-        };
-      });
-
-      const roundedMcqScore = Number(mcqScore.toFixed(2));
-      const roundedCodeScore = Number(codeScore.toFixed(2));
-      const totalScore = Number((roundedMcqScore + roundedCodeScore).toFixed(2));
-      const totalMaxScore = Number((mcqMaxScore + codeMaxScore).toFixed(2));
 
       const submission = {
         id: `sub_${Date.now()}`,
@@ -201,16 +152,20 @@ export async function POST(req, { params }) {
         violated: false,
         violationReason: null,
         submittedAt: new Date().toISOString(),
-        mcqScore: roundedMcqScore,
-        mcqMaxScore,
-        codeScore: roundedCodeScore,
-        codeMaxScore,
-        totalScore,
-        totalMaxScore,
+        mcqScore: graded.mcqScore,
+        mcqMaxScore: graded.mcqMaxScore,
+        codeScore: graded.codeScore,
+        codeMaxScore: graded.codeMaxScore,
+        totalScore: graded.totalScore,
+        totalMaxScore: graded.totalMaxScore,
+        mcqAttemptedCount: graded.mcqAttemptedCount,
+        totalMcqs: graded.totalMcqs,
+        codingAttemptedCount: graded.codingAttemptedCount,
+        totalCodings: graded.totalCodings,
         webcamWarnings: session.webcamWarnings || 0,
         status: 'COMPLETED',
-        mcqDetails,
-        codingDetails,
+        mcqDetails: graded.mcqDetails,
+        codingDetails: graded.codingDetails,
         sentToStudent: false,
       };
 

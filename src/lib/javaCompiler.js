@@ -12,11 +12,12 @@ export function sanitizeErrorMessage(errorStr, tempDir = '') {
   if (!errorStr || typeof errorStr !== 'string') return '';
   let sanitized = errorStr;
   if (tempDir) {
-    const escapedDir = tempDir.replace(/\\/g, '\\\\');
-    sanitized = sanitized.replace(new RegExp(escapedDir + '[\\\\/]', 'g'), '');
+    const escapedDir = tempDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    sanitized = sanitized.replace(new RegExp(escapedDir + '[\\\\/]?', 'g'), '');
   }
-  // Remove absolute Windows temp paths
+  // Remove absolute Windows and Linux/Docker temp paths before Java filenames
   sanitized = sanitized.replace(/[A-Za-z]:\\[^:\n\r]+[\\/]([A-Za-z0-9_]+\.java)/g, '$1');
+  sanitized = sanitized.replace(/(?:\/tmp|\/var\/tmp)\/[^:\n\r]+\/([A-Za-z0-9_]+\.java)/g, '$1');
   return sanitized.trim();
 }
 
@@ -387,7 +388,7 @@ export async function evaluateJavaTestSuite(code, testCases = [], timeoutMs = 80
           resolve({
             success: false,
             output: stdout,
-            error: 'Time Limit Exceeded (TLE): Execution exceeded 3.5 seconds.',
+            error: `Time Limit Exceeded (TLE): Execution exceeded ${Math.round(timeoutMs / 1000)} seconds.`,
           });
         }, timeoutMs);
 

@@ -9,6 +9,110 @@ import AddMcqQuestion from '@/components/admin/AddMcqQuestion';
 import { base64ToFloat32 } from '@/lib/audioPcm';
 import { RTC_CONFIG, HAS_TURN_SERVER } from '@/lib/webrtcConfig';
 
+function toDatetimeLocalValue(isoStr) {
+  const ms = Date.parse(isoStr || '2026-11-28T22:00:00+05:30');
+  if (Number.isNaN(ms)) return '2026-11-28T22:00';
+  const d = new Date(ms);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function ScheduleCard({ test, onToggleAlwaysOpen, onSaveSchedule }) {
+  const [startLocal, setStartLocal] = useState(() => toDatetimeLocalValue(test.scheduledStartTime));
+  const [durationMinutes, setDurationMinutes] = useState(test.durationMinutes || 90);
+  const [entryWindowMinutes, setEntryWindowMinutes] = useState(test.entryWindowMinutes || 30);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const parsed = new Date(startLocal);
+      const scheduledStartTime = Number.isNaN(parsed.getTime())
+        ? test.scheduledStartTime
+        : parsed.toISOString();
+      await onSaveSchedule(test, {
+        scheduledStartTime,
+        durationMinutes: Number(durationMinutes) || 90,
+        entryWindowMinutes: Number(entryWindowMinutes) || 30,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="p-4 rounded-xl bg-[#FAF8F5] border border-stone-200 space-y-3 text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-bold text-stone-900 text-sm">{test.title}</div>
+        <button
+          type="button"
+          onClick={() => onToggleAlwaysOpen(test)}
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
+            test.alwaysOpen
+              ? 'bg-emerald-700 text-white border-emerald-700'
+              : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-100'
+          }`}
+        >
+          {test.alwaysOpen ? 'Open for Testing ✓' : 'Open for Testing'}
+        </button>
+      </div>
+
+      <form onSubmit={handleSave} className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+        <div className="sm:col-span-3">
+          <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">
+            Scheduled Start Time
+          </label>
+          <input
+            type="datetime-local"
+            value={startLocal}
+            onChange={(e) => setStartLocal(e.target.value)}
+            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-lg text-stone-800 text-xs font-mono"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">
+            Duration (mins)
+          </label>
+          <input
+            type="number"
+            min="5"
+            max="300"
+            value={durationMinutes}
+            onChange={(e) => setDurationMinutes(e.target.value)}
+            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-lg text-stone-800 text-xs font-mono"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">
+            Entry Window (mins)
+          </label>
+          <input
+            type="number"
+            min="5"
+            max="180"
+            value={entryWindowMinutes}
+            onChange={(e) => setEntryWindowMinutes(e.target.value)}
+            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-lg text-stone-800 text-xs font-mono"
+            required
+          />
+        </div>
+        <div className="flex items-end">
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full py-1.5 px-3 bg-stone-900 hover:bg-stone-800 text-white rounded-lg font-semibold text-xs transition disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save Schedule'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function RtcLiveVideo({ videoStream, audioStream, muted }) {
   const videoElRef = useRef(null);
   const audioElRef = useRef(null);
@@ -888,6 +992,28 @@ export default function AdminPage() {
     }
   };
 
+  const handleSaveTestSchedule = async (test, updates) => {
+    try {
+      const res = await fetch('/api/admin/manage', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testId: test.id, ...updates }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setFeedback({
+          type: 'success',
+          message: `Updated schedule & duration for "${test.title}".`,
+        });
+        fetchData();
+      } else {
+        setFeedback({ type: 'error', message: json.message || 'Failed to update schedule' });
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message });
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center p-4">
@@ -1425,28 +1551,12 @@ export default function AdminPage() {
 
               <div className="space-y-3">
                 {data.tests.map((t) => (
-                  <div key={t.id} className="p-4 rounded-xl bg-[#FAF8F5] border border-stone-200 space-y-2 text-xs">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-bold text-stone-900 text-sm">{t.title}</div>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleTestAlwaysOpen(t)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
-                          t.alwaysOpen
-                            ? 'bg-emerald-700 text-white border-emerald-700'
-                            : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-100'
-                        }`}
-                      >
-                        {t.alwaysOpen ? 'Open for Testing ✓' : 'Open for Testing'}
-                      </button>
-                    </div>
-                    <div className="text-stone-600">
-                      Starts: <strong className="font-mono">{t.scheduledStartTime || '2026-11-28T13:00:00+05:30'}</strong>
-                    </div>
-                    <div className="text-stone-600">
-                      Entry Window: <strong>{t.alwaysOpen ? 'Always Open (Testing)' : `${t.entryWindowMinutes || 30} minutes`}</strong> &bull; Duration: <strong>{t.durationMinutes} mins</strong>
-                    </div>
-                  </div>
+                  <ScheduleCard
+                    key={`${t.id}_${t.scheduledStartTime}_${t.durationMinutes}_${t.entryWindowMinutes}`}
+                    test={t}
+                    onToggleAlwaysOpen={handleToggleTestAlwaysOpen}
+                    onSaveSchedule={handleSaveTestSchedule}
+                  />
                 ))}
               </div>
             </div>

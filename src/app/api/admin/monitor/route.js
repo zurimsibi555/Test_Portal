@@ -8,6 +8,7 @@ import {
   closeRtcViewer,
 } from '@/lib/liveMonitor';
 import { saveSubmissionPdf } from '@/lib/pdfReport';
+import { gradeAttemptedAnswers } from '@/lib/gradeSubmission';
 import { verifyAdmin } from '@/lib/adminAuth';
 
 export const dynamic = 'force-dynamic';
@@ -90,10 +91,7 @@ export async function POST(req) {
         session.isSubmitted = true;
 
         const test = store.tests.find((t) => t.id === session.testId);
-        const testMcqs = store.mcqQuestions.filter((q) => q.testId === session.testId);
-        const testCodings = store.codingQuestions.filter((q) => q.testId === session.testId);
-        const mcqMaxScore = testMcqs.reduce((acc, q) => acc + Number(q.points ?? 2.5), 0);
-        const codeMaxScore = testCodings.reduce((acc, q) => acc + Number(q.points ?? 5), 0);
+        const graded = await gradeAttemptedAnswers(store, session);
 
         const sub = {
           id: `sub_${Date.now()}`,
@@ -106,14 +104,20 @@ export async function POST(req) {
           violationReason: terminationReason,
           webcamWarnings: session.webcamWarnings || 0,
           submittedAt: new Date().toISOString(),
-          mcqScore: 0,
-          mcqMaxScore,
-          codeScore: 0,
-          codeMaxScore,
-          totalScore: 0,
-          totalMaxScore: mcqMaxScore + codeMaxScore,
-          score: 0,
+          mcqScore: graded.mcqScore,
+          mcqMaxScore: graded.mcqMaxScore,
+          codeScore: graded.codeScore,
+          codeMaxScore: graded.codeMaxScore,
+          totalScore: graded.totalScore,
+          totalMaxScore: graded.totalMaxScore,
+          score: graded.totalScore,
+          mcqAttemptedCount: graded.mcqAttemptedCount,
+          totalMcqs: graded.totalMcqs,
+          codingAttemptedCount: graded.codingAttemptedCount,
+          totalCodings: graded.totalCodings,
           status: 'TERMINATED BY ADMIN',
+          mcqDetails: graded.mcqDetails,
+          codingDetails: graded.codingDetails,
           sentToStudent: false,
         };
 

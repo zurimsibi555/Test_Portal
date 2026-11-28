@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { isBraveBrowser } from '@/lib/mediaHelpers';
 import {
   BookOpen,
   ArrowLeft,
@@ -38,6 +39,11 @@ export default function PreparePage() {
     micMuted: false,
   });
   const [permRetryCount, setPermRetryCount] = useState(0);
+  const [isBrave, setIsBrave] = useState(false);
+
+  useEffect(() => {
+    isBraveBrowser().then(setIsBrave).catch(() => {});
+  }, []);
   const [activeTabId, setActiveTabId] = useState(PREPARE_TOPICS[0].id); // topic.id | 'mcq-practice'
   const [compilerOpen, setCompilerOpen] = useState(false);
   const [compilerQuestion, setCompilerQuestion] = useState({
@@ -110,12 +116,17 @@ export default function PreparePage() {
                 {permStatus.checking
                   ? 'Requesting Camera & Microphone permissions. Please click "Allow" in the browser popup...'
                   : permStatus.camGranted && permStatus.micGranted && permStatus.micMuted
-                  ? 'Your microphone is currently muted at the OS/hardware level or in use by another app. Please unmute your microphone to continue.'
+                  ? 'Your microphone is muted at the OS/browser level (common in Brave Shields, muted laptop mic key Fn+F4, or Bluetooth headset). Switch to Google Chrome and unmute your microphone.'
                   : permStatus.camGranted && permStatus.micGranted && permStatus.audioSuspended
                   ? 'Camera & Microphone permissions are granted! Click the button below once to activate live audio monitoring and enter Preparation Mode.'
                   : permStatus.error ||
                     'You must grant both Camera and Microphone permissions to access Preparation Mode.'}
               </p>
+              {isBrave && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] text-rose-800 font-medium text-left">
+                  <strong>Brave Browser Detected:</strong> Brave Shields can mute microphone audio. Please open this portal in <strong>Google Chrome</strong>.
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2.5 text-xs">

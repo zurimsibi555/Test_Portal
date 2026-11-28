@@ -10,9 +10,13 @@ import {
   MicOff,
   Camera,
   RefreshCw,
+  GripHorizontal,
+  Minimize2,
+  Maximize2,
 } from 'lucide-react';
 import { downsampleFloat32ToInt16, int16ToBase64 } from '@/lib/audioPcm';
 import { RTC_CONFIG } from '@/lib/webrtcConfig';
+import { acquireLiveCamAndUnmutedMic } from '@/lib/mediaHelpers';
 
 const TARGET_SAMPLE_RATE = 16000;
 const SAMPLES_PER_CHUNK = 4800; // 300ms of clear 16kHz wideband voice
@@ -42,6 +46,10 @@ export default function WebcamProctor({
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [warningCount, setWarningCount] = useState(0);
   const [graceCountdown, setGraceCountdown] = useState(10);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [dragPos, setDragPos] = useState(null); // { x, y } clamped viewport coordinates
+  const proctorCardRef = useRef(null);
+  const dragStateRef = useRef(null);
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -283,24 +291,13 @@ export default function WebcamProctor({
       }
 
       try {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error('Browser does not support Camera/Microphone access.');
-        }
-
-        localStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 480, max: 640 },
-            height: { ideal: 360, max: 480 },
-            frameRate: { ideal: 20, max: 24 },
-            facingMode: 'user',
-          },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            channelCount: 1,
-          },
+        const acquired = await acquireLiveCamAndUnmutedMic({
+          width: { ideal: 480, max: 640 },
+          height: { ideal: 360, max: 480 },
+          frameRate: { ideal: 20, max: 24 },
+          facingMode: 'user',
         });
+        localStream = acquired.stream;
       } catch (err) {
         if (cancelled) return;
         if (captureCtx && captureCtx.state !== 'closed') {
@@ -1018,32 +1015,93 @@ export default function WebcamProctor({
 
   const permissionsMissing = !checkingPerms && (!camGranted || !micGranted);
 
-  // EXAM MODE: Visible Webcam + Mic Monitor Badge + Forceful Permission Block
+  // Drag handlers so students can freely reposition the floating webcam widget anywhere
+  const handlePointerDownCard = (e) => {
+    if (e.target.closest('button')) return;
+    const card = proctorCardRef.current;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    dragStateRef.current = {
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+    };
+    const onMove = (moveEv) => {
+      if (!dragStateRef.current) return;
+      const { offsetX, offsetY, width, height } = dragStateRef.current;
+      const maxX = Math.max(8, window.innerWidth - width - 8);
+      const maxY = Math.max(8, window.innerHeight - height - 8);
+      const nextX = Math.min(maxX, Math.max(8, moveEv.clientX - offsetX));
+      const nextY = Math.min(maxY, Math.max(8, moveEv.clientY - offsetY));
+      setDragPos({ x: nextX, y: nextY });
+    };
+    const onUp = () => {
+      dragStateRef.current = null;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  // EXAM MODE: Draggable Floating Webcam + Mic Monitor Badge + Forceful Permission Block
   return (
     <>
       <canvas ref={presenceCanvasRef} className="hidden" />
       <canvas ref={streamCanvasRef} className="hidden" />
 
-      <div className="fixed bottom-4 right-4 z-40 bg-white/95 backdrop-blur border border-stone-200 rounded-2xl p-2.5 shadow-lg flex flex-col gap-2 w-48">
-        <div className="flex items-center justify-between px-0.5 text-[10px] font-semibold text-stone-700">
+      <div
+        ref={proctorCardRef}
+        onPointerDown={handlePointerDownCard}
+        style={
+          dragPos
+            ? { left: `${dragPos.x}px`, top: `${dragPos.y}px` }
+            : { left: '16px', bottom: '16px' }
+        }
+        className={`fixed z-40 bg-white/95 backdrop-blur border border-stone-200 rounded-2xl shadow-lg flex flex-col gap-2 select-none touch-none ${
+          isMinimized ? 'p-2 w-auto' : 'p-2.5 w-48'
+        }`}
+        title="Drag to move Cam & Mic Proctor anywhere"
+      >
+        <div className="flex items-center justify-between gap-2 px-0.5 text-[10px] font-semibold text-stone-700 cursor-grab active:cursor-grabbing">
           <div className="flex items-center gap-1.5">
+            <GripHorizontal className="w-3 h-3 text-stone-400 shrink-0" />
             <span
-              className={`w-2 h-2 rounded-full ${
+              className={`w-2 h-2 rounded-full shrink-0 ${
                 camGranted && micGranted && isPresent
                   ? 'bg-emerald-600 animate-pulse'
                   : 'bg-rose-500 animate-ping'
               }`}
             ></span>
-            <span>Cam & Mic Proctor</span>
+            <span>{isMinimized ? 'Proctor Active' : 'Cam & Mic Proctor'}</span>
           </div>
-          {warningCount > 0 && (
-            <span className="text-rose-600 font-mono font-bold">
-              {warningCount}/{maxWarnings}
-            </span>
-          )}
+          <div className="flex items-center gap-1">
+            {warningCount > 0 && (
+              <span className="text-rose-600 font-mono font-bold">
+                {warningCount}/{maxWarnings}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsMinimized((m) => !m)}
+              className="p-0.5 rounded hover:bg-stone-100 text-stone-500 hover:text-stone-800 transition"
+              title={isMinimized ? 'Expand webcam preview' : 'Minimize webcam preview'}
+            >
+              {isMinimized ? (
+                <Maximize2 className="w-3 h-3" />
+              ) : (
+                <Minimize2 className="w-3 h-3" />
+              )}
+            </button>
+          </div>
         </div>
 
-        <div className="relative rounded-xl overflow-hidden bg-[#FAF8F5] aspect-[4/3] flex items-center justify-center border border-stone-200">
+        <div
+          className={`relative rounded-xl overflow-hidden bg-[#FAF8F5] aspect-[4/3] flex items-center justify-center border border-stone-200 ${
+            isMinimized ? 'hidden' : ''
+          }`}
+        >
           {cameraError || !camGranted ? (
             <div className="p-2 text-center text-rose-600 space-y-1">
               <CameraOff className="w-5 h-5 mx-auto" />
@@ -1078,28 +1136,30 @@ export default function WebcamProctor({
         </div>
 
         {/* Live Microphone Level Bar */}
-        <div className="flex items-center gap-2 px-1 py-1 rounded-lg bg-[#FAF8F5] border border-stone-200">
-          {micGranted ? (
-            <Mic className="w-3 h-3 text-emerald-700 shrink-0" />
-          ) : (
-            <MicOff className="w-3 h-3 text-rose-600 shrink-0" />
-          )}
-          <div className="flex-1 h-1.5 bg-stone-200 rounded-full overflow-hidden">
-            <div
-              className={`h-full transition-all duration-150 ${
-                micLevel > 65 ? 'bg-amber-600' : 'bg-emerald-600'
-              }`}
-              style={{ width: `${micGranted ? Math.max(6, micLevel) : 0}%` }}
-            />
+        {!isMinimized && (
+          <div className="flex items-center gap-2 px-1 py-1 rounded-lg bg-[#FAF8F5] border border-stone-200">
+            {micGranted ? (
+              <Mic className="w-3 h-3 text-emerald-700 shrink-0" />
+            ) : (
+              <MicOff className="w-3 h-3 text-rose-600 shrink-0" />
+            )}
+            <div className="flex-1 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-150 ${
+                  micLevel > 65 ? 'bg-amber-600' : 'bg-emerald-600'
+                }`}
+                style={{ width: `${micGranted ? Math.max(6, micLevel) : 0}%` }}
+              />
+            </div>
+            <span className="text-[9px] font-mono text-stone-600 w-7 text-right">
+              {micGranted ? `${micLevel}%` : 'Off'}
+            </span>
           </div>
-          <span className="text-[9px] font-mono text-stone-600 w-7 text-right">
-            {micGranted ? `${micLevel}%` : 'Off'}
-          </span>
-        </div>
+        )}
 
         {micGranted && micMuted && (
-          <div className="w-full py-1 px-2 rounded-lg bg-rose-50 border border-rose-300 text-rose-800 text-[10px] font-bold text-center">
-            Mic Muted on Device — Unmute Now
+          <div className="w-full py-1 px-2 rounded-lg bg-rose-50 border border-rose-300 text-rose-800 text-[10px] font-bold text-center leading-tight">
+            Mic Muted by OS/Browser — Unmute or Use Chrome
           </div>
         )}
 

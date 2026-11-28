@@ -18,14 +18,23 @@ export async function POST(req) {
       return NextResponse.json({ success: false, message: 'Test not found' }, { status: 404 });
     }
 
-    // Enforce scheduled start time (1:00 PM sharp) and 30-minute expiry window
+    // Enforce scheduled start time and joining window
     const schedule = getExamScheduleStatus(test);
+    const startLabel = new Date(schedule.startMs).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
     if (schedule.status === 'UPCOMING') {
       return NextResponse.json(
         {
           success: false,
           code: 'EXAM_NOT_STARTED',
-          message: 'Exam has not started yet. It begins on Saturday, 28 Nov at 1:00 PM sharp.',
+          message: `Exam has not started yet. It begins on ${startLabel} IST.`,
         },
         { status: 403 }
       );
@@ -36,7 +45,7 @@ export async function POST(req) {
         {
           success: false,
           code: 'EXAM_EXPIRED_ABSENT',
-          message: 'ABSENT: The 30-minute exam entry window expired at 1:30 PM. You cannot attend this exam.',
+          message: `ABSENT: The ${schedule.windowMinutes}-minute exam entry window has expired. You cannot attend this exam.`,
         },
         { status: 403 }
       );

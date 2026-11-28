@@ -64,7 +64,7 @@ export function generateSubmissionPdfBuffer(submission) {
   // Student & Session Metadata Card
   doc.setFillColor(250, 248, 245); // Milky white #FAF8F5
   doc.setDrawColor(230, 225, 214);
-  doc.roundedRect(margin, y, contentWidth, 82, 6, 6, 'FD');
+  doc.roundedRect(margin, y, contentWidth, 98, 6, 6, 'FD');
 
   doc.setTextColor(28, 25, 23);
   doc.setFont('helvetica', 'bold');
@@ -86,7 +86,21 @@ export function generateSubmissionPdfBuffer(submission) {
   doc.setFont('helvetica', 'normal');
   doc.text(`Webcam Warnings: ${submission.webcamWarnings || 0}`, margin + 280, y + 62);
 
-  y += 98;
+  const mcqAtt =
+    submission.mcqAttemptedCount ??
+    (Array.isArray(submission.mcqDetails)
+      ? submission.mcqDetails.filter((m) => m.selectedOption !== null && m.selectedOption !== undefined).length
+      : 0);
+  const mcqTot = submission.totalMcqs ?? (Array.isArray(submission.mcqDetails) ? submission.mcqDetails.length : 0);
+  const codeAtt =
+    submission.codingAttemptedCount ??
+    (Array.isArray(submission.codingDetails)
+      ? submission.codingDetails.filter((c) => Boolean(c.code && c.code.trim())).length
+      : 0);
+  const codeTot = submission.totalCodings ?? (Array.isArray(submission.codingDetails) ? submission.codingDetails.length : 0);
+  doc.text(`Attempted: MCQs ${mcqAtt}/${mcqTot}  |  Coding ${codeAtt}/${codeTot}`, margin + 14, y + 82);
+
+  y += 114;
 
   if (isDisqualified && submission.violationReason) {
     ensureSpace(46);

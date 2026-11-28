@@ -37,12 +37,13 @@ export default function AntiCheatGuard({ isActive, onViolation }) {
       }
     };
 
-    // 4. Disable DevTools & Inspect shortcuts
+    // 4. Disable DevTools, Inspect & accidental tab-switch / reload shortcuts
     const handleKeyDown = (e) => {
       if (
         e.key === 'F12' ||
+        e.key === 'F5' ||
         (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
-        (e.ctrlKey && (e.key === 'u' || e.key === 'U'))
+        ((e.ctrlKey || e.metaKey) && /^[1-9uUrRtTwWnN]$/.test(e.key))
       ) {
         e.preventDefault();
       }

@@ -3,8 +3,8 @@
  * Supports `alwaysOpen` tests (open immediately for testing/live access)
  * as well as scheduled start times with a configurable entry window.
  */
-export const DEFAULT_EXAM_START_ISO = '2026-11-28T13:00:00+05:30';
-export const DEFAULT_ENTRY_WINDOW_MINUTES = 30; // 1:00 PM to 1:30 PM IST
+export const DEFAULT_EXAM_START_ISO = '2026-11-28T22:00:00+05:30';
+export const DEFAULT_ENTRY_WINDOW_MINUTES = 30; // 10:00 PM to 10:30 PM IST
 
 export function getExamScheduleStatus(test, nowMs = Date.now()) {
   const startIso = test?.scheduledStartTime || DEFAULT_EXAM_START_ISO;

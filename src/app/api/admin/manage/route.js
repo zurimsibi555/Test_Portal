@@ -50,7 +50,7 @@ export async function POST(req) {
         title,
         description: description || '',
         durationMinutes: parseInt(durationMinutes, 10) || 90,
-        scheduledStartTime: scheduledStartTime || '2026-11-28T13:00:00+05:30',
+        scheduledStartTime: scheduledStartTime || '2026-11-28T22:00:00+05:30',
         entryWindowMinutes: parseInt(entryWindowMinutes, 10) || 30,
         isActive: true,
         createdAt: new Date().toISOString()

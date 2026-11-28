@@ -23,6 +23,7 @@ import {
   formatCountdown,
   hasCompletedCurrentExam,
 } from '@/lib/examSchedule';
+import { isBraveBrowser } from '@/lib/mediaHelpers';
 
 export default function Home() {
   const [tests, setTests] = useState([]);
@@ -30,7 +31,12 @@ export default function Home() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [showExamPopup, setShowExamPopup] = useState(true);
   const [alreadyAttended, setAlreadyAttended] = useState(false);
+  const [isBrave, setIsBrave] = useState(false);
   const clockOffsetRef = useRef(0);
+
+  useEffect(() => {
+    isBraveBrowser().then(setIsBrave).catch(() => {});
+  }, []);
 
   useEffect(() => {
     async function fetchTests() {
@@ -52,7 +58,7 @@ export default function Home() {
                   description:
                     'Official Core Java, OOPs concepts, and Problem Solving examination.',
                   durationMinutes: 90,
-                  scheduledStartTime: '2026-11-28T13:00:00+05:30',
+                  scheduledStartTime: '2026-11-28T22:00:00+05:30',
                   entryWindowMinutes: 30,
                   alwaysOpen: false,
                 },
@@ -82,7 +88,7 @@ export default function Home() {
     title: 'Java Foundation Test',
     description: 'Official Core Java, OOPs concepts, and Problem Solving examination.',
     durationMinutes: 90,
-    scheduledStartTime: '2026-11-28T13:00:00+05:30',
+    scheduledStartTime: '2026-11-28T22:00:00+05:30',
     entryWindowMinutes: 30,
     alwaysOpen: false,
   };
@@ -97,6 +103,11 @@ export default function Home() {
     weekday: 'long',
     day: 'numeric',
     month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+  const formattedEnd = new Date(schedule.endMs).toLocaleString('en-IN', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -244,7 +255,7 @@ export default function Home() {
                   </span>
                   <h2 className="text-xl font-black text-stone-900">{primaryTest.title}</h2>
                   <p className="text-xs text-stone-600 leading-relaxed">
-                    Starts sharp on <strong>Saturday, 28 Nov at 1:00 PM</strong>. The entry window expires after <strong>30 minutes (1:30 PM)</strong>.
+                    Starts sharp on <strong>{formattedStart}</strong>. The entry window expires after <strong>{schedule.windowMinutes} minutes ({formattedEnd})</strong>.
                   </p>
                   <div className="p-3.5 rounded-2xl bg-[#FAF8F5] border border-stone-200">
                     <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-0.5">
@@ -291,9 +302,21 @@ export default function Home() {
 
           <p className="text-xs md:text-sm text-stone-600 max-w-lg mx-auto leading-relaxed">
             {schedule.alwaysOpen
-              ? 'Examination is currently live and open for testing. Both camera and microphone permissions are strictly required.'
-              : 'Exam opens on schedule with a strict entry window. Both camera and microphone permissions are required during the exam.'}
+              ? 'Examination is currently live and open for testing. Use Google Chrome (Desktop/Laptop) with Camera & Microphone enabled.'
+              : 'Exam opens on schedule with a strict entry window. Use Google Chrome (Desktop/Laptop) with Camera & Microphone enabled.'}
           </p>
+
+          {isBrave && (
+            <div className="max-w-lg mx-auto p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-900 text-xs text-left flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-bold text-rose-800">Brave Browser Detected — Please Use Google Chrome</div>
+                <p className="text-[11px] text-rose-800 mt-0.5 leading-relaxed">
+                  Brave Shields can mute your microphone (<strong>OS Muted</strong>) and block live audio monitoring. Switch to <strong>Google Chrome</strong> before starting your exam.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ABSENT CARD WHEN 30-MIN WINDOW EXPIRES */}
@@ -308,7 +331,7 @@ export default function Home() {
               </span>
               <h2 className="text-2xl font-black text-stone-900">{primaryTest.title}</h2>
               <p className="text-xs text-stone-600 max-w-md mx-auto leading-relaxed">
-                This examination started at <strong>1:00 PM sharp</strong> and the 30-minute entry window closed at <strong>1:30 PM</strong>. You can no longer attend this examination and have been marked <strong>Absent</strong>.
+                This examination started on <strong>{formattedStart}</strong> and the {schedule.windowMinutes}-minute entry window closed at <strong>{formattedEnd}</strong>. You can no longer attend this examination and have been marked <strong>Absent</strong>.
               </p>
             </div>
             <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-stone-200 text-xs text-stone-600 max-w-md mx-auto">
@@ -393,7 +416,7 @@ export default function Home() {
                 >
                   <Clock className="w-4 h-4 text-amber-700" />
                   <span>
-                    Exam Starts Sat 28 Nov at 1:00 PM Sharp ({formatCountdown(schedule.msUntilStart)})
+                    Exam Starts {formattedStart} ({formatCountdown(schedule.msUntilStart)})
                   </span>
                 </button>
               ) : (

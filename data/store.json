@@ -7,7 +7,7 @@
       "durationMinutes": 90,
       "isActive": true,
       "createdAt": "2026-11-25T09:12:44.388Z",
-      "scheduledStartTime": "2026-11-28T13:00:00+05:30",
+      "scheduledStartTime": "2026-11-28T22:00:00+05:30",
       "entryWindowMinutes": 30,
       "alwaysOpen": false
     }
@@ -621,6 +621,484 @@
       "points": 5
     }
   ],
-  "sessions": {},
-  "submissions": []
+  "sessions": {
+    "b032a27a6d53a32e": {
+      "id": "b032a27a6d53a32e",
+      "testId": "demo-java-test",
+      "studentName": "erd",
+      "rollNo": "775",
+      "paired": false,
+      "pairedAt": null,
+      "startTime": null,
+      "durationSeconds": 5400,
+      "remainingSeconds": 5400,
+      "isStarted": false,
+      "isSubmitted": true,
+      "violated": true,
+      "violationReason": "Fullscreen mode was exited by student",
+      "createdAt": "2026-11-28T08:52:31.442Z",
+      "camGranted": true,
+      "micGranted": true,
+      "lastMonitorAt": "2026-11-28T08:52:49.285Z",
+      "draftMcqAnswers": {
+        "mcq-20": 1
+      },
+      "draftCodingAnswers": {},
+      "draftCodingSolutions": {},
+      "lastDraftSyncAt": "2026-11-28T08:53:54.608Z"
+    }
+  },
+  "submissions": [
+    {
+      "id": "sub_1795856050544",
+      "sessionId": "b032a27a6d53a32e",
+      "testId": "demo-java-test",
+      "testTitle": "Java Foundation Test",
+      "studentName": "erd",
+      "rollNo": "775",
+      "violated": true,
+      "violationReason": "Fullscreen mode was exited by student",
+      "webcamWarnings": 0,
+      "submittedAt": "2026-11-28T08:54:10.544Z",
+      "mcqScore": 0,
+      "mcqMaxScore": 50,
+      "codeScore": 0,
+      "codeMaxScore": 50,
+      "totalScore": 0,
+      "totalMaxScore": 100,
+      "score": 0,
+      "mcqAttemptedCount": 1,
+      "totalMcqs": 20,
+      "codingAttemptedCount": 0,
+      "totalCodings": 10,
+      "status": "DISQUALIFIED / AUTO_SUBMITTED",
+      "mcqDetails": [
+        {
+          "questionId": "mcq-1",
+          "questionNumber": 1,
+          "question": "What will be the output of the following Java statement?\nSystem.out.println(10 + 20 + \"Java\" + 10 + 20);",
+          "options": [
+            "60Java",
+            "30Java1020",
+            "30Java30",
+            "1020Java1020"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-2",
+          "questionNumber": 2,
+          "question": "Which Scanner method reads an entire line of text including spaces in Java?",
+          "options": [
+            "sc.next()",
+            "sc.nextInt()",
+            "sc.nextLine()",
+            "sc.readLine()"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-3",
+          "questionNumber": 3,
+          "question": "What is the key difference between System.out.print() and System.out.println()?",
+          "options": [
+            "print() can only print numbers while println() prints strings",
+            "println() moves the cursor to a new line after printing",
+            "print() automatically adds a space after every output",
+            "There is no difference between them"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-4",
+          "questionNumber": 4,
+          "question": "If the user enters \"25 Java\" and the program runs:\nint x = sc.nextInt();\nString s = sc.next();\nWhat is stored in variable s?",
+          "options": [
+            "25",
+            "Java",
+            "25 Java",
+            "Empty string"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-5",
+          "questionNumber": 5,
+          "question": "What is the output of the following if-else snippet?\nint a = 5, b = 10;\nif (a > 0 || ++b > 10) {\n    System.out.println(a + \" \" + b);\n}",
+          "options": [
+            "5 11",
+            "5 10",
+            "6 11",
+            "Compilation Error"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-6",
+          "questionNumber": 6,
+          "question": "Which if condition correctly checks whether an integer n is between 10 and 50 (inclusive)?",
+          "options": [
+            "if (10 <= n <= 50)",
+            "if (n >= 10 || n <= 50)",
+            "if (n >= 10 && n <= 50)",
+            "if (n > 10 && n < 50)"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-7",
+          "questionNumber": 7,
+          "question": "What will be printed by the following if-else ladder?\nint marks = 72;\nif (marks >= 90) System.out.println(\"A\");\nelse if (marks >= 75) System.out.println(\"B\");\nelse if (marks >= 60) System.out.println(\"C\");\nelse System.out.println(\"D\");",
+          "options": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-8",
+          "questionNumber": 8,
+          "question": "What is the output of the following nested if-else code?\nint x = 10;\nif (x > 5)\n    if (x < 8) System.out.println(\"One\");\n    else System.out.println(\"Two\");\nelse\n    System.out.println(\"Three\");",
+          "options": [
+            "One",
+            "Two",
+            "Three",
+            "Nothing is printed"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-9",
+          "questionNumber": 9,
+          "question": "In a Java switch statement, what happens if you forget to put break; at the end of a matching case?",
+          "options": [
+            "A compilation error occurs",
+            "The program stops immediately",
+            "Execution falls through into the next case block(s) until a break or end of switch",
+            "Only the default block runs"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-10",
+          "questionNumber": 10,
+          "question": "What will be the output of the following switch code?\nint day = 2;\nswitch (day) {\n    case 1: System.out.print(\"Mon \");\n    case 2: System.out.print(\"Tue \");\n    case 3: System.out.print(\"Wed \"); break;\n    default: System.out.print(\"Sun\");\n}",
+          "options": [
+            "Tue ",
+            "Tue Wed ",
+            "Mon Tue Wed ",
+            "Tue Wed Sun"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-11",
+          "questionNumber": 11,
+          "question": "When does the default block execute in a Java switch statement?",
+          "options": [
+            "When none of the case values match (or execution falls through to it)",
+            "Always at the end of every switch",
+            "Only when case 0 matches",
+            "Before the first case"
+          ],
+          "selectedOption": null,
+          "correctOption": 0,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-12",
+          "questionNumber": 12,
+          "question": "What is the minimum number of times a do-while loop body executes if the condition is false from the start?",
+          "options": [
+            "0 times",
+            "1 time",
+            "2 times",
+            "Infinite times"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-13",
+          "questionNumber": 13,
+          "question": "What will be printed by the following loop with jump statements?\nint sum = 0;\nfor (int i = 1; i <= 5; i++) {\n    if (i == 3) continue;\n    if (i == 5) break;\n    sum += i;\n}\nSystem.out.println(sum);",
+          "options": [
+            "15",
+            "7",
+            "3",
+            "10"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-14",
+          "questionNumber": 14,
+          "question": "How many times will \"Hi\" be printed by this nested loop?\nfor (int i = 1; i <= 3; i++) {\n    for (int j = 1; j <= 2; j++) {\n        System.out.println(\"Hi\");\n    }\n}",
+          "options": [
+            "3",
+            "5",
+            "6",
+            "2"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-15",
+          "questionNumber": 15,
+          "question": "Which keyword skips only the current iteration of a loop and jumps directly to the next iteration?",
+          "options": [
+            "break",
+            "continue",
+            "return",
+            "exit"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-16",
+          "questionNumber": 16,
+          "question": "Which return type is used when a Java function/method does not return any value?",
+          "options": [
+            "null",
+            "empty",
+            "void",
+            "int"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-17",
+          "questionNumber": 17,
+          "question": "What will be the output of the following method overloading code?\nclass Test {\n    static void printVal(int x) { System.out.println(\"int: \" + x); }\n    static void printVal(double x) { System.out.println(\"double: \" + x); }\n    public static void main(String[] args) {\n        printVal('A');\n    }\n}",
+          "options": [
+            "int: 65",
+            "double: 65.0",
+            "char: A",
+            "Compilation Error"
+          ],
+          "selectedOption": null,
+          "correctOption": 0,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-18",
+          "questionNumber": 18,
+          "question": "What will be the output of this function call?\nstatic int calc(int a, int b) {\n    return a * 2 + b;\n}\npublic static void main(String[] args) {\n    System.out.println(calc(3, 4));\n}",
+          "options": [
+            "14",
+            "10",
+            "11",
+            "7"
+          ],
+          "selectedOption": null,
+          "correctOption": 1,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-19",
+          "questionNumber": 19,
+          "question": "What is the output of:\nint x = 10;\nSystem.out.println(x++ + ++x);",
+          "options": [
+            "20",
+            "21",
+            "22",
+            "23"
+          ],
+          "selectedOption": null,
+          "correctOption": 2,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        },
+        {
+          "questionId": "mcq-20",
+          "questionNumber": 20,
+          "question": "What is the output of the following function code?\nstatic void change(int x) {\n    x = x + 10;\n}\npublic static void main(String[] args) {\n    int num = 5;\n    change(num);\n    System.out.println(num);\n}",
+          "options": [
+            "5",
+            "15",
+            "10",
+            "Compilation Error"
+          ],
+          "selectedOption": 1,
+          "correctOption": 0,
+          "isCorrect": false,
+          "marksAwarded": 0,
+          "maxMarks": 2.5
+        }
+      ],
+      "codingDetails": [
+        {
+          "questionId": "code-1",
+          "questionNumber": 1,
+          "title": "User Greeting Program (Input / Output)",
+          "code": "import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Read name using sc and print: Welcome <name>\n        \n    }\n}",
+          "passedTests": 0,
+          "totalTests": 4,
+          "marksAwarded": 0,
+          "maxMarks": 5
+        },
+        {
+          "questionId": "code-2",
+          "questionNumber": 2,
+          "title": "Student Class with Methods (OOPs Concepts)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 4,
+          "marksAwarded": 0,
+          "maxMarks": 5
+        },
+        {
+          "questionId": "code-3",
+          "questionNumber": 3,
+          "title": "Print 1 to 50 Except 45 (Loops & Jumps)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 1,
+          "marksAwarded": 0,
+          "maxMarks": 5
+        },
+        {
+          "questionId": "code-4",
+          "questionNumber": 4,
+          "title": "Voting Eligibility Checker (Conditional Statements)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 5,
+          "marksAwarded": 0,
+          "maxMarks": 5
+        },
+        {
+          "questionId": "code-5",
+          "questionNumber": 5,
+          "title": "Calculate Area of Rectangle (Functions / Methods)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 5,
+          "marksAwarded": 0,
+          "maxMarks": 5
+        },
+        {
+          "questionId": "code-6",
+          "questionNumber": 6,
+          "title": "Find Factorial of a Number (Loops & Math)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 5,
+          "marksAwarded": 0,
+          "maxMarks": 5
+        },
+        {
+          "questionId": "code-7",
+          "questionNumber": 7,
+          "title": "Sum of Fibonacci Series (Loops & Math)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 5,
+          "marksAwarded": 0,
+          "maxMarks": 5
+        },
+        {
+          "questionId": "code-8",
+          "questionNumber": 8,
+          "title": "Pythagoras Theorem Hypotenuse (Functions & Math)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 5,
+          "marksAwarded": 0,
+          "maxMarks": 5
+        },
+        {
+          "questionId": "code-9",
+          "questionNumber": 9,
+          "title": "Driving Licence Eligibility Checker (Loop & Nested If-Else)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 4,
+          "marksAwarded": 0,
+          "maxMarks": 5
+        },
+        {
+          "questionId": "code-10",
+          "questionNumber": 10,
+          "title": "Circle Class with Methods and Objects (OOPs & Math)",
+          "code": "",
+          "passedTests": 0,
+          "totalTests": 5,
+          "marksAwarded": 0,
+          "maxMarks": 5
+        }
+      ],
+      "sentToStudent": false,
+      "pdfFileName": "Report_775_sub_1795856050544.pdf",
+      "pdfGeneratedAt": "2026-11-28T08:54:11.182Z"
+    }
+  ]
 }

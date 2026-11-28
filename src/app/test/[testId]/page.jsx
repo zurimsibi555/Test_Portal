@@ -34,6 +34,7 @@ import {
   hasCompletedCurrentExam,
   markExamCompleted,
 } from '@/lib/examSchedule';
+import { acquireLiveCamAndUnmutedMic, isBraveBrowser } from '@/lib/mediaHelpers';
 
 function TestContent() {
   const params = useParams();
@@ -71,47 +72,76 @@ function TestContent() {
   const [preflightPerms, setPreflightPerms] = useState({
     camGranted: false,
     micGranted: false,
+    micMuted: false,
+    micLabel: '',
     checking: false,
     error: '',
   });
+  const [isBrave, setIsBrave] = useState(false);
+
+  useEffect(() => {
+    isBraveBrowser().then(setIsBrave).catch(() => {});
+  }, []);
 
   const verifyCamAndMic = useCallback(async () => {
     setPreflightPerms((prev) => ({ ...prev, checking: true, error: '' }));
     let tempStream = null;
     try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('Browser does not support Camera/Microphone access.');
-      }
-      tempStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: 'user' },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1,
-        },
+      const acquired = await acquireLiveCamAndUnmutedMic({
+        width: { ideal: 320 },
+        height: { ideal: 240 },
+        facingMode: 'user',
       });
-      const vTrack = tempStream.getVideoTracks()[0];
-      const aTrack = tempStream.getAudioTracks()[0];
+      tempStream = acquired.stream;
+      const vTrack = acquired.videoTrack;
+      const aTrack = acquired.audioTrack;
       const camOk = Boolean(vTrack && vTrack.readyState === 'live');
       const micOk = Boolean(aTrack && aTrack.readyState === 'live');
       if (!camOk || !micOk) {
         setPreflightPerms({
           camGranted: camOk,
           micGranted: micOk,
+          micMuted: false,
+          micLabel: acquired.micLabel || '',
           checking: false,
           error: 'Both Camera and Microphone permissions are strictly required.',
         });
         return false;
       }
-      setPreflightPerms({ camGranted: true, micGranted: true, checking: false, error: '' });
+      if (acquired.micMuted) {
+        setPreflightPerms({
+          camGranted: true,
+          micGranted: true,
+          micMuted: true,
+          micLabel: acquired.micLabel || '',
+          checking: false,
+          error:
+            'Your microphone is muted at the OS/browser level (common in Brave Shields, muted laptop mic key, or disconnected Bluetooth headset). Please unmute or switch to Google Chrome.',
+        });
+        return false;
+      }
+      setPreflightPerms({
+        camGranted: true,
+        micGranted: true,
+        micMuted: false,
+        micLabel: acquired.micLabel || '',
+        checking: false,
+        error: '',
+      });
       return true;
     } catch (err) {
       const msg =
         err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError'
           ? 'Camera & Microphone permissions denied. Please allow both in browser settings to begin.'
           : err?.message || 'Camera or Microphone not detected.';
-      setPreflightPerms({ camGranted: false, micGranted: false, checking: false, error: msg });
+      setPreflightPerms({
+        camGranted: false,
+        micGranted: false,
+        micMuted: false,
+        micLabel: '',
+        checking: false,
+        error: msg,
+      });
       return false;
     } finally {
       if (tempStream) {
@@ -188,6 +218,38 @@ function TestContent() {
     }
   };
 
+  const latestAnswersRef = useRef({
+    mcqAnswers: {},
+    codingEvaluations: {},
+    codingSolutions: {},
+  });
+
+  useEffect(() => {
+    latestAnswersRef.current = {
+      mcqAnswers,
+      codingEvaluations,
+      codingSolutions,
+    };
+  }, [mcqAnswers, codingEvaluations, codingSolutions]);
+
+  // Periodically sync in-progress draft answers so even mobile/admin-triggered auto-submits preserve attempted work
+  useEffect(() => {
+    if (stage !== 'EXAM' || !session?.id) return;
+    const timer = setTimeout(() => {
+      fetch(`/api/session/${session.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sync_draft',
+          mcqAnswers,
+          codingAnswers: codingEvaluations,
+          codingSolutions,
+        }),
+      }).catch(() => {});
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [stage, session?.id, mcqAnswers, codingEvaluations, codingSolutions]);
+
   const handleViolation = useCallback(
     async (reason) => {
       setViolationReason(reason);
@@ -195,11 +257,18 @@ function TestContent() {
       markExamCompleted(testData, 'DISQUALIFIED');
 
       if (session?.id) {
+        const snapshot = latestAnswersRef.current;
         try {
           await fetch(`/api/session/${session.id}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'violation', reason }),
+            body: JSON.stringify({
+              action: 'violation',
+              reason,
+              mcqAnswers: snapshot.mcqAnswers,
+              codingAnswers: snapshot.codingEvaluations,
+              codingSolutions: snapshot.codingSolutions,
+            }),
           });
         } catch (err) {
           console.error('Failed to report violation', err);
@@ -298,7 +367,7 @@ function TestContent() {
   }, [stage]);
 
   const enterFullscreenAndStart = async () => {
-    if (!preflightPerms.camGranted || !preflightPerms.micGranted) {
+    if (!preflightPerms.camGranted || !preflightPerms.micGranted || preflightPerms.micMuted) {
       const ok = await verifyCamAndMic();
       if (!ok) return;
     }
@@ -331,9 +400,22 @@ function TestContent() {
     );
   }
 
-  // Enforce Scheduled Time & 30-Minute Absent Window before entering exam
+  // Enforce Scheduled Time & Entry Window before entering exam
   const schedule = getExamScheduleStatus(testData, nowMs);
   const isBlockedAttended = !schedule.alwaysOpen && alreadyAttended;
+  const formattedStart = new Date(schedule.startMs).toLocaleString('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+  const formattedEnd = new Date(schedule.endMs).toLocaleString('en-IN', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
 
   if (stage === 'LOGIN' && (schedule.status === 'EXPIRED' || isBlockedAttended)) {
     return (
@@ -350,7 +432,7 @@ function TestContent() {
             <p className="text-xs text-stone-600 leading-relaxed">
               {isBlockedAttended
                 ? 'You have already attended or submitted this examination. Re-entry is not permitted.'
-                : 'The examination started on Saturday, 28 Nov at 1:00 PM sharp and the 30-minute joining window closed at 1:30 PM. You have been marked Absent and cannot attend it again.'}
+                : `The examination started on ${formattedStart} and the ${schedule.windowMinutes}-minute joining window closed at ${formattedEnd}. You have been marked Absent and cannot attend it again.`}
             </p>
           </div>
           <Link
@@ -377,7 +459,7 @@ function TestContent() {
             </span>
             <h1 className="text-2xl font-bold text-stone-900">{testData.title}</h1>
             <p className="text-xs text-stone-600 leading-relaxed">
-              This exam starts on <strong>Saturday, 28 Nov at 1:00 PM sharp</strong>. The joining window will stay open for 30 minutes (until 1:30 PM).
+              This exam starts on <strong>{formattedStart}</strong>. The joining window will stay open for {schedule.windowMinutes} minutes (until {formattedEnd}).
             </p>
           </div>
           <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-stone-200">
@@ -422,11 +504,24 @@ function TestContent() {
               Anti-Cheating Regulations:
             </div>
             <ul className="list-disc pl-4 space-y-1 text-amber-800 text-[11px] leading-relaxed">
+              <li><strong>Use Google Chrome (Desktop/Laptop) only</strong> — Brave/Firefox/privacy shields can mute your microphone.</li>
               <li>Switching browser tabs or minimizing the window will trigger a proctoring violation.</li>
               <li>Scan the pairing QR code with your mobile device before entering fullscreen.</li>
               <li>Remain in full view of the webcam and keep your microphone active (monitored by admin).</li>
             </ul>
           </div>
+
+          {isBrave && (
+            <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-4 mb-5 text-xs text-rose-900 space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-rose-800">
+                <AlertTriangle className="w-4 h-4 text-rose-600" />
+                Brave Browser Detected — Switch to Google Chrome
+              </div>
+              <p className="text-[11px] text-rose-800 leading-relaxed">
+                Brave Shields often mute microphone audio (<strong>OS Muted</strong>) or block live video monitoring. Please open this exam in <strong>Google Chrome</strong>.
+              </p>
+            </div>
+          )}
 
           {loginError && (
             <div className="p-3 mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
@@ -556,27 +651,56 @@ function TestContent() {
               </div>
               <div
                 className={`p-2.5 rounded-xl border flex items-center justify-center gap-1.5 ${
-                  preflightPerms.micGranted
+                  preflightPerms.micGranted && !preflightPerms.micMuted
                     ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                     : 'bg-rose-50 border-rose-200 text-rose-800'
                 }`}
               >
                 <Mic className="w-3.5 h-3.5" />
-                <span>{preflightPerms.micGranted ? 'Mic Ready' : 'Mic Required'}</span>
+                <span>
+                  {!preflightPerms.micGranted
+                    ? 'Mic Required'
+                    : preflightPerms.micMuted
+                    ? 'Mic Muted (OS)'
+                    : 'Mic Ready'}
+                </span>
               </div>
             </div>
+
+            {preflightPerms.micLabel && (
+              <p className="text-[10px] text-stone-500 font-mono truncate">
+                Selected Mic: {preflightPerms.micLabel}
+              </p>
+            )}
+
+            {isBrave && (
+              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] text-rose-800 font-medium">
+                <strong>Brave Browser detected:</strong> If mic shows Muted, open this exam in <strong>Google Chrome</strong> instead.
+              </div>
+            )}
 
             {preflightPerms.error && (
               <p className="text-[11px] text-rose-700 font-medium leading-snug">
                 {preflightPerms.error}
               </p>
             )}
+
+            {preflightPerms.micMuted && (
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[10px] text-amber-900 space-y-1 leading-relaxed">
+                <div className="font-bold">How to fix &quot;Mic Muted&quot;:</div>
+                <p>
+                  1. Open exam in <strong>Google Chrome</strong> (not Brave).<br />
+                  2. Unmute laptop mic key (<code>Fn+F4</code>) &amp; check Windows Sound → Input.<br />
+                  3. Disconnect Bluetooth earphones &amp; close Zoom/Meet/Teams, then click <strong>Verify Cam &amp; Mic</strong>.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-3">
             <button
               onClick={enterFullscreenAndStart}
-              disabled={!preflightPerms.camGranted || !preflightPerms.micGranted || preflightPerms.checking}
+              disabled={!preflightPerms.camGranted || !preflightPerms.micGranted || preflightPerms.micMuted || preflightPerms.checking}
               className={`w-full py-3 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed ${
                 isMobilePaired
                   ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
@@ -587,13 +711,15 @@ function TestContent() {
               <span>
                 {!preflightPerms.camGranted || !preflightPerms.micGranted
                   ? 'Allow Camera & Mic to Begin Test'
+                  : preflightPerms.micMuted
+                  ? 'Unmute Microphone to Begin Test'
                   : isMobilePaired
                   ? 'Start Exam in Fullscreen'
                   : 'Enter Fullscreen & Begin Test'}
               </span>
             </button>
 
-            {!isMobilePaired && preflightPerms.camGranted && preflightPerms.micGranted && (
+            {!isMobilePaired && preflightPerms.camGranted && preflightPerms.micGranted && !preflightPerms.micMuted && (
               <button
                 onClick={enterFullscreenAndStart}
                 className="text-xs text-stone-500 hover:text-emerald-700 underline font-medium"
