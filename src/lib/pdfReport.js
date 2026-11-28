@@ -15,6 +15,22 @@ function sanitizeText(str) {
   return String(str).replace(/[^\x20-\x7E\n\r\t]/g, ' ');
 }
 
+function formatIstDateTime(input) {
+  const date = input ? new Date(input) : new Date();
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  const formatted = date.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  });
+  return `${sanitizeText(formatted)} IST`;
+}
+
 /**
  * Generates a detailed PDF evaluation report for a student submission.
  * Returns a Node.js Buffer containing the PDF bytes.
@@ -53,7 +69,7 @@ export function generateSubmissionPdfBuffer(submission) {
 
   doc.setFontSize(9);
   doc.text(
-    `Generated: ${new Date().toLocaleString()}`,
+    `Generated: ${formatIstDateTime()}`,
     pageWidth - margin,
     56,
     { align: 'right' }
@@ -76,7 +92,7 @@ export function generateSubmissionPdfBuffer(submission) {
   doc.setFontSize(9.5);
   doc.setTextColor(87, 83, 78);
   doc.text(`Submission ID: ${sanitizeText(submission.id)}`, margin + 14, y + 42);
-  doc.text(`Submitted At: ${new Date(submission.submittedAt).toLocaleString()}`, margin + 280, y + 42);
+  doc.text(`Submitted At: ${formatIstDateTime(submission.submittedAt)}`, margin + 280, y + 42);
 
   const isDisqualified = !!submission.violated;
   doc.setFont('helvetica', 'bold');

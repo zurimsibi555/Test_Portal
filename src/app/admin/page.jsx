@@ -1302,7 +1302,13 @@ export default function AdminPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-stone-500 font-mono text-[11px]">
-                          {new Date(sub.submittedAt).toLocaleTimeString()}
+                          {new Date(sub.submittedAt).toLocaleTimeString('en-IN', {
+                            timeZone: 'Asia/Kolkata',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            hour12: true,
+                          })}
                         </td>
                       </tr>
                     ))}

@@ -100,6 +100,7 @@ export default function Home() {
   const isLive = schedule.status === 'LIVE' && !isBlockedAttended;
 
   const formattedStart = new Date(schedule.startMs).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     weekday: 'long',
     day: 'numeric',
     month: 'short',
@@ -108,6 +109,7 @@ export default function Home() {
     hour12: true,
   });
   const formattedEnd = new Date(schedule.endMs).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
