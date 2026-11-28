@@ -11,29 +11,40 @@ function MobileSessionContent() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isPaired, setIsPaired] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [violated, setViolated] = useState(false);
   const [violationMessage, setViolationMessage] = useState('');
   const [remainingSeconds, setRemainingSeconds] = useState(0);
 
   const violationTriggeredRef = useRef(false);
 
-  // Send violation to backend
+  // Send violation to backend (if desktop already submitted cleanly, sync submitted state instead)
   const triggerViolation = useCallback(async (reason) => {
-    if (violationTriggeredRef.current) return;
+    if (violationTriggeredRef.current || submitted) return;
     violationTriggeredRef.current = true;
-    setViolated(true);
-    setViolationMessage(reason);
 
     try {
-      await fetch(`/api/session/${sessionId}`, {
+      const res = await fetch(`/api/session/${sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'violation', reason }),
       });
+      const json = await res.json().catch(() => ({}));
+      if (json.alreadySubmitted) {
+        const sRes = await fetch(`/api/session/${sessionId}`).catch(() => null);
+        const sJson = await sRes?.json().catch(() => null);
+        if (sJson?.session && !sJson.session.violated) {
+          setSubmitted(true);
+          return;
+        }
+      }
     } catch (err) {
       console.error(err);
     }
-  }, [sessionId]);
+
+    setViolated(true);
+    setViolationMessage(reason);
+  }, [sessionId, submitted]);
 
   // Initial Pair & fetch session
   useEffect(() => {
@@ -65,9 +76,9 @@ function MobileSessionContent() {
     }
   }, [sessionId]);
 
-  // Mobile Anti-Cheat Detectors
+  // Mobile Anti-Cheat Detectors (disabled once exam is submitted)
   useEffect(() => {
-    if (!isPaired || violated) return;
+    if (!isPaired || violated || submitted) return;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -92,16 +103,36 @@ function MobileSessionContent() {
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('pagehide', handlePageHide);
     };
-  }, [isPaired, violated, triggerViolation]);
+  }, [isPaired, violated, submitted, triggerViolation]);
+
+  // Poll desktop submission status so mobile unlocks cleanly once exam finishes
+  useEffect(() => {
+    if (!isPaired || violated || submitted) return;
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/session/${sessionId}`, { cache: 'no-store' });
+        const json = await res.json();
+        if (json?.success && json?.session?.isSubmitted) {
+          if (json.session.violated) {
+            setViolated(true);
+            setViolationMessage(json.session.violationReason || 'Session terminated');
+          } else {
+            setSubmitted(true);
+          }
+        }
+      } catch {}
+    }, 4000);
+    return () => clearInterval(poll);
+  }, [isPaired, violated, submitted, sessionId]);
 
   // Synced countdown
   useEffect(() => {
-    if (!isPaired || violated) return;
+    if (!isPaired || violated || submitted) return;
     const interval = setInterval(() => {
       setRemainingSeconds((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(interval);
-  }, [isPaired, violated]);
+  }, [isPaired, violated, submitted]);
 
   const formatTimer = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -116,6 +147,21 @@ function MobileSessionContent() {
           <div className="w-12 h-12 border-4 border-emerald-700 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-sm text-stone-600 font-medium">Connecting to Desktop Exam Session...</p>
         </div>
+      </div>
+    );
+  }
+
+  // SUBMITTED SCREEN
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-[#FAF8F5] text-stone-800 flex flex-col items-center justify-center p-6 text-center select-none">
+        <div className="w-20 h-20 rounded-full bg-emerald-100 border-2 border-emerald-400 flex items-center justify-center mb-6">
+          <ShieldCheck className="w-10 h-10 text-emerald-700" />
+        </div>
+        <h1 className="text-2xl font-black mb-2 text-stone-900">Exam Submitted Successfully</h1>
+        <p className="text-stone-600 text-xs max-w-xs leading-relaxed">
+          Your desktop examination has been submitted. You may safely close this companion screen now.
+        </p>
       </div>
     );
   }

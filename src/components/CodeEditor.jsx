@@ -88,6 +88,10 @@ export default function CodeEditor({
   const handleEditorChange = (value) => {
     const val = value || '';
     setCode(val);
+    if (evaluationResults) {
+      setEvaluationResults(null);
+      if (onEvaluationComplete) onEvaluationComplete(question.id, null);
+    }
     if (onCodeChange) onCodeChange(val);
   };
 
@@ -98,6 +102,7 @@ export default function CodeEditor({
       setOutput('');
       setErrorOutput('');
       setEvaluationResults(null);
+      if (onEvaluationComplete) onEvaluationComplete(question.id, null);
     }
   };
 

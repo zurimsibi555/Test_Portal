@@ -65,6 +65,9 @@ function TestContent() {
   // Violation & Submission confirmation (no scores shown to student)
   const [violationReason, setViolationReason] = useState('');
   const [submissionId, setSubmissionId] = useState(null);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [isSubmittingTest, setIsSubmittingTest] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [loginError, setLoginError] = useState('');
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [alreadyAttended, setAlreadyAttended] = useState(false);
@@ -305,24 +308,30 @@ function TestContent() {
   }, [session?.id, isMobilePaired, stage, handleViolation]);
 
   const submittingRef = useRef(false);
+  const examEndsAtRef = useRef(0);
   const handleSubmitTest = useCallback(
     async (autoReason = null) => {
       if (submittingRef.current) return;
-      if (!autoReason && !confirm('Are you sure you want to finish and submit the test?')) {
+      if (!autoReason) {
+        setShowSubmitConfirm(true);
         return;
       }
       if (!session?.id) return;
       submittingRef.current = true;
+      setShowSubmitConfirm(false);
+      setIsSubmittingTest(true);
+      setSubmitError('');
 
+      const snapshot = latestAnswersRef.current;
       try {
         const res = await fetch(`/api/session/${session.id}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'submit',
-            mcqAnswers,
-            codingAnswers: codingEvaluations,
-            codingSolutions,
+            mcqAnswers: snapshot.mcqAnswers,
+            codingAnswers: snapshot.codingEvaluations,
+            codingSolutions: snapshot.codingSolutions,
           }),
         });
         const data = await res.json();
@@ -335,13 +344,16 @@ function TestContent() {
           }
         } else {
           submittingRef.current = false;
+          setIsSubmittingTest(false);
+          setSubmitError(data.message || 'Submission failed. Please click Submit Test again.');
         }
       } catch (err) {
         submittingRef.current = false;
-        alert(`Submission error: ${err.message}`);
+        setIsSubmittingTest(false);
+        setSubmitError(`Submission error: ${err.message}. Please retry.`);
       }
     },
-    [session, mcqAnswers, codingEvaluations, codingSolutions, testData]
+    [session, testData]
   );
 
   const handleSubmitTestRef = useRef(handleSubmitTest);
@@ -349,22 +361,28 @@ function TestContent() {
     handleSubmitTestRef.current = handleSubmitTest;
   }, [handleSubmitTest]);
 
-  // Timer countdown
+  // Wall-clock 90-minute timer countdown (drift-free even if browser throttles intervals)
   useEffect(() => {
     if (stage !== 'EXAM') return;
-    const interval = setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          handleSubmitTestRef.current('Time expired');
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
+    if (!examEndsAtRef.current) {
+      const durSec = (testData?.durationMinutes || 90) * 60;
+      examEndsAtRef.current = Date.now() + durSec * 1000;
+    }
+    const tick = () => {
+      const secs = Math.max(0, Math.ceil((examEndsAtRef.current - Date.now()) / 1000));
+      setRemainingSeconds(secs);
+    };
+    tick();
+    const interval = setInterval(tick, 500);
     return () => clearInterval(interval);
-  }, [stage]);
+  }, [stage, testData?.durationMinutes]);
+
+  // Auto-submit reliably when timer reaches 00:00
+  useEffect(() => {
+    if (stage === 'EXAM' && remainingSeconds <= 0 && !submittingRef.current) {
+      handleSubmitTestRef.current('Time expired');
+    }
+  }, [stage, remainingSeconds]);
 
   const enterFullscreenAndStart = async () => {
     if (!preflightPerms.camGranted || !preflightPerms.micGranted || preflightPerms.micMuted) {
@@ -848,20 +866,28 @@ function TestContent() {
 
   // Handle Coding problem Submit & Next
   const handleCodingSubmitAndNext = (questionId, code, evaluationResult) => {
-    if (code) {
-      setCodingSolutions((prev) => ({ ...prev, [questionId]: code }));
-    }
+    const nextSolutions = code
+      ? { ...latestAnswersRef.current.codingSolutions, [questionId]: code }
+      : latestAnswersRef.current.codingSolutions;
+    const nextEvals = { ...latestAnswersRef.current.codingEvaluations };
     if (evaluationResult) {
-      setCodingEvaluations((prev) => ({ ...prev, [questionId]: evaluationResult }));
+      nextEvals[questionId] = evaluationResult;
+    } else {
+      delete nextEvals[questionId];
     }
+    latestAnswersRef.current = {
+      ...latestAnswersRef.current,
+      codingSolutions: nextSolutions,
+      codingEvaluations: nextEvals,
+    };
+    setCodingSolutions(nextSolutions);
+    setCodingEvaluations(nextEvals);
 
     if (selectedCodingIndex < totalCodingProblems - 1) {
       setSelectedCodingIndex((prev) => prev + 1);
     } else {
-      // Last coding question: ask to review & submit test
-      if (confirm('You have reached the end of the coding section. Would you like to submit your complete test now?')) {
-        handleSubmitTest();
-      }
+      // Last coding question: open single clean in-page confirmation modal
+      setShowSubmitConfirm(true);
     }
   };
 
@@ -880,8 +906,8 @@ function TestContent() {
 
   return (
     <div className="h-screen bg-[#FAF8F5] text-stone-800 flex flex-col select-none overflow-hidden">
-      {/* Anti-Cheat Background Guard */}
-      <AntiCheatGuard isActive={stage === 'EXAM'} onViolation={handleViolation} />
+      {/* Anti-Cheat Background Guard (paused once submission begins so fullscreen exit never races submit) */}
+      <AntiCheatGuard isActive={stage === 'EXAM' && !isSubmittingTest} onViolation={handleViolation} />
 
       {/* AI Webcam + Mic Proctor (Visible in Exam Mode, monitored by Admin) */}
       <WebcamProctor
@@ -1270,10 +1296,15 @@ function TestContent() {
                       }));
                     }}
                     onEvaluationComplete={(questionId, result) => {
-                      setCodingEvaluations((prev) => ({
-                        ...prev,
-                        [questionId]: result,
-                      }));
+                      setCodingEvaluations((prev) => {
+                        const next = { ...prev };
+                        if (result) {
+                          next[questionId] = result;
+                        } else {
+                          delete next[questionId];
+                        }
+                        return next;
+                      });
                     }}
                     onSubmitAndNext={handleCodingSubmitAndNext}
                     onSkip={handleCodingSkip}
@@ -1284,6 +1315,75 @@ function TestContent() {
           )}
         </main>
       </div>
+
+      {/* In-Page Submit Confirmation Modal (avoids window.confirm fullscreen exit) */}
+      {showSubmitConfirm && (
+        <div className="fixed inset-0 z-[60] bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white border border-stone-200 rounded-3xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-stone-900">Submit Complete Assessment?</h3>
+            <p className="text-xs text-stone-600 leading-relaxed">
+              You have answered <strong>{answeredMcqsCount}/{totalMcqs}</strong> MCQs and evaluated/attempted{' '}
+              <strong>{Object.keys(codingEvaluations).length}/{totalCodingProblems}</strong> coding problems.
+              Once submitted, you cannot re-enter the exam.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSubmitConfirm(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-stone-100 text-stone-700 border border-stone-300 transition"
+              >
+                Continue Test
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSubmitTest('Manual submit')}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm transition"
+              >
+                Confirm &amp; Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submitting / Error Overlay */}
+      {(isSubmittingTest || submitError) && (
+        <div className="fixed inset-0 z-[65] bg-stone-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="max-w-sm w-full bg-white border border-stone-200 rounded-3xl p-6 shadow-2xl text-center space-y-4">
+            {isSubmittingTest ? (
+              <>
+                <div className="w-10 h-10 border-4 border-emerald-700 border-t-transparent rounded-full animate-spin mx-auto" />
+                <h3 className="text-base font-bold text-stone-900">Submitting Your Exam...</h3>
+                <p className="text-xs text-stone-500">
+                  Evaluating your answers and generating the report. Please wait...
+                </p>
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="w-10 h-10 text-rose-600 mx-auto" />
+                <h3 className="text-base font-bold text-stone-900">Submission Error</h3>
+                <p className="text-xs text-rose-700">{submitError}</p>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSubmitError('')}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold border border-stone-300 text-stone-700"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSubmitTest('Retry submit')}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-700 text-white"
+                  >
+                    Retry Submit
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
