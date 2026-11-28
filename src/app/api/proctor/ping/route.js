@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getStore, saveStore } from '@/lib/store';
-import { updateLiveFeed, getLiveFeed, getRtcRequestsForStudent } from '@/lib/liveMonitor';
+import {
+  updateLiveFeed,
+  getLiveFeed,
+  getRtcRequestsForStudent,
+  isAudioStreamRequested,
+} from '@/lib/liveMonitor';
 
 export async function POST(req) {
   try {
@@ -15,6 +20,7 @@ export async function POST(req) {
       audioLevel,
       audioChunks,
       audioReset,
+      streamEpoch,
       rtcSignal,
       camGranted,
       micGranted,
@@ -41,6 +47,7 @@ export async function POST(req) {
       audioLevel,
       audioChunks,
       audioReset,
+      streamEpoch,
       rtcSignal,
       camGranted,
       micGranted,
@@ -68,6 +75,7 @@ export async function POST(req) {
       success: true,
       terminate: Boolean(feed?.terminateRequested || session?.violated),
       terminateReason: feed?.terminateReason || session?.violationReason || null,
+      audioRequested: isAudioStreamRequested(sessionId),
       rtcRequests,
       updatedAt: updated?.updatedAt,
     });

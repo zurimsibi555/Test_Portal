@@ -7,34 +7,53 @@ import Link from 'next/link';
 import AddCodingQuestion from '@/components/admin/AddCodingQuestion';
 import AddMcqQuestion from '@/components/admin/AddMcqQuestion';
 import { base64ToFloat32 } from '@/lib/audioPcm';
-import { RTC_ICE_SERVERS } from '@/lib/webrtcConfig';
+import { RTC_CONFIG, HAS_TURN_SERVER } from '@/lib/webrtcConfig';
 
-function RtcLiveVideo({ stream, muted }) {
+function RtcLiveVideo({ videoStream, audioStream, muted }) {
   const videoElRef = useRef(null);
   const audioElRef = useRef(null);
+  const [audioBlocked, setAudioBlocked] = useState(false);
 
   useEffect(() => {
     const vEl = videoElRef.current;
-    if (vEl && stream) {
-      if (vEl.srcObject !== stream) {
-        vEl.srcObject = stream;
+    if (vEl && videoStream) {
+      if (vEl.srcObject !== videoStream) {
+        vEl.srcObject = videoStream;
       }
       vEl.muted = true;
       vEl.play?.().catch(() => {});
     }
+  }, [videoStream]);
 
+  useEffect(() => {
     const aEl = audioElRef.current;
-    if (aEl && stream) {
-      if (aEl.srcObject !== stream) {
-        aEl.srcObject = stream;
-      }
-      aEl.muted = muted;
-      aEl.volume = 1;
-      if (!muted) {
-        aEl.play?.().catch(() => {});
-      }
+    if (!aEl || !audioStream) return;
+    if (aEl.srcObject !== audioStream) {
+      aEl.srcObject = audioStream;
     }
-  }, [stream, muted]);
+    aEl.muted = muted;
+    aEl.volume = 1;
+    // Always keep audio element playing (muted when not listening) so unmuting never fails autoplay
+    const playPromise = aEl.play?.();
+    if (playPromise && typeof playPromise.then === 'function') {
+      playPromise
+        .then(() => setAudioBlocked(false))
+        .catch(() => {
+          if (!muted) setAudioBlocked(true);
+        });
+    }
+  }, [audioStream, muted]);
+
+  const handleForceUnmute = () => {
+    const aEl = audioElRef.current;
+    if (!aEl) return;
+    aEl.muted = false;
+    aEl.volume = 1;
+    aEl
+      .play?.()
+      .then(() => setAudioBlocked(false))
+      .catch(() => setAudioBlocked(true));
+  };
 
   return (
     <>
@@ -46,7 +65,16 @@ function RtcLiveVideo({ stream, muted }) {
         disablePictureInPicture
         className="w-full h-full object-cover"
       />
-      <audio ref={audioElRef} autoPlay playsInline muted={muted} className="hidden" />
+      <audio ref={audioElRef} autoPlay playsInline muted={muted} className="sr-only" />
+      {!muted && audioBlocked && (
+        <button
+          type="button"
+          onClick={handleForceUnmute}
+          className="absolute bottom-2 right-2 z-10 px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold shadow-md transition"
+        >
+          Click to Unmute Audio
+        </button>
+      )}
     </>
   );
 }
@@ -73,14 +101,17 @@ export default function AdminPage() {
   const gainNodeRef = useRef(null);
   const nextAudioTimeRef = useRef(0);
   const lastAudioSeqRef = useRef(0);
+  const lastAudioEpochRef = useRef(null);
   const knownFramesRef = useRef({});
   const viewerIdRef = useRef('');
   const rtcPeersRef = useRef(new Map());
   const rtcConnectedRef = useRef({});
+  const rtcRemoteStreamsRef = useRef({});
   const rtcRetryAtRef = useRef({});
+  const rtcFailCountRef = useRef({});
 
   // Form states
-  const [testForm, setTestForm] = useState({ title: '', description: '', durationMinutes: 120 });
+  const [testForm, setTestForm] = useState({ title: '', description: '', durationMinutes: 90 });
   const [selectedTestId, setSelectedTestId] = useState('');
   
   const [mcqForm, setMcqForm] = useState({
@@ -199,7 +230,7 @@ export default function AdminPage() {
       const resData = await res.json();
       if (resData.success) {
         setFeedback({ type: 'success', message: `Test "${testForm.title}" created successfully!` });
-        setTestForm({ title: '', description: '', durationMinutes: 120 });
+        setTestForm({ title: '', description: '', durationMinutes: 90 });
         fetchData();
       } else {
         setFeedback({ type: 'error', message: resData.message });
@@ -331,13 +362,13 @@ export default function AdminPage() {
         if (freshChunks.length === 0) return;
 
         const now = ctx.currentTime;
-        // If playback fell too far behind (> 1.8s queued), trim to latest 2 chunks cleanly
+        // If playback fell too far behind (> 1.2s queued), trim to latest 2 chunks cleanly
         let toPlay = freshChunks;
-        if (nextAudioTimeRef.current - now > 1.8) {
+        if (nextAudioTimeRef.current - now > 1.2) {
           toPlay = freshChunks.slice(-2);
-          nextAudioTimeRef.current = now + 0.08;
+          nextAudioTimeRef.current = now + 0.025;
         } else if (nextAudioTimeRef.current < now) {
-          nextAudioTimeRef.current = now + 0.08;
+          nextAudioTimeRef.current = now + 0.025;
         }
 
         for (const chunk of toPlay) {
@@ -367,12 +398,18 @@ export default function AdminPage() {
 
   const closeAllRtcPeers = useCallback((notifyServer = false) => {
     for (const entry of rtcPeersRef.current.values()) {
+      if (entry.disconnectedTimer) {
+        clearTimeout(entry.disconnectedTimer);
+      }
       try {
         entry.pc.close();
       } catch {}
     }
     rtcPeersRef.current.clear();
     rtcConnectedRef.current = {};
+    rtcRemoteStreamsRef.current = {};
+    rtcFailCountRef.current = {};
+    rtcRetryAtRef.current = {};
     Promise.resolve().then(() => {
       setRtcRemoteStreams({});
       setRtcConnectedMap({});
@@ -389,6 +426,9 @@ export default function AdminPage() {
   const closeRtcPeerForSession = useCallback((sessionId) => {
     const entry = rtcPeersRef.current.get(sessionId);
     if (entry) {
+      if (entry.disconnectedTimer) {
+        clearTimeout(entry.disconnectedTimer);
+      }
       try {
         entry.pc.close();
       } catch {}
@@ -401,6 +441,9 @@ export default function AdminPage() {
         delete next[sessionId];
         return next;
       });
+    }
+    if (rtcRemoteStreamsRef.current[sessionId]) {
+      delete rtcRemoteStreamsRef.current[sessionId];
     }
     setRtcRemoteStreams((prev) => {
       if (!prev[sessionId]) return prev;
@@ -426,26 +469,55 @@ export default function AdminPage() {
       }
 
       const now = Date.now();
-      for (const feed of feeds) {
+      const tasks = feeds.map(async (feed) => {
         const sid = feed.sessionId;
         if (!feed.camGranted || !feed.micGranted) {
           closeRtcPeerForSession(sid);
-          continue;
+          return;
         }
 
         let entry = rtcPeersRef.current.get(sid);
+        // If student restarted their media stream or handshake stalled >10s, force a clean renegotiation
+        if (entry) {
+          const epochChanged =
+            typeof feed.streamEpoch === 'number' &&
+            feed.streamEpoch > 0 &&
+            entry.streamEpoch !== undefined &&
+            entry.streamEpoch !== feed.streamEpoch;
+          const handshakeStalled =
+            entry.pc.connectionState !== 'connected' && now - entry.createdAt > 10000;
+          if (epochChanged) {
+            rtcFailCountRef.current[sid] = 0;
+            rtcRetryAtRef.current[sid] = 0;
+            closeRtcPeerForSession(sid);
+            entry = null;
+          } else if (handshakeStalled) {
+            const fails = (rtcFailCountRef.current[sid] || 0) + 1;
+            rtcFailCountRef.current[sid] = fails;
+            const backoffMs =
+              fails === 1 ? 2500 : fails === 2 ? 8000 : HAS_TURN_SERVER ? 12000 : 45000;
+            rtcRetryAtRef.current[sid] = now + backoffMs;
+            closeRtcPeerForSession(sid);
+            entry = null;
+          }
+        }
+
         if (!entry) {
           const retryAt = rtcRetryAtRef.current[sid] || 0;
-          if (now < retryAt) continue;
+          if (now < retryAt) return;
 
-          const pc = new RTCPeerConnection({ iceServers: RTC_ICE_SERVERS });
+          const pc = new RTCPeerConnection(RTC_CONFIG);
           const offerId = `off_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-          const remoteStream = new MediaStream();
+          const videoStream = new MediaStream();
+          const audioStream = new MediaStream();
 
           entry = {
             pc,
             offerId,
-            remoteStream,
+            streamEpoch: feed.streamEpoch || 0,
+            createdAt: now,
+            videoStream,
+            audioStream,
             remoteSet: false,
             appliedCandidateCount: 0,
             queuedCandidates: [],
@@ -457,14 +529,30 @@ export default function AdminPage() {
           pc.addTransceiver('audio', { direction: 'recvonly' });
 
           pc.ontrack = (ev) => {
-            if (ev.track && !remoteStream.getTracks().some((t) => t.id === ev.track.id)) {
-              remoteStream.addTrack(ev.track);
+            if (!ev.track) return;
+            ev.track.enabled = true;
+            if (ev.track.kind === 'video') {
+              if (!videoStream.getTracks().some((t) => t.id === ev.track.id)) {
+                videoStream.addTrack(ev.track);
+              }
+              const nextInfo = {
+                ...(rtcRemoteStreamsRef.current[sid] || {}),
+                videoStream,
+              };
+              rtcRemoteStreamsRef.current[sid] = nextInfo;
+              setRtcRemoteStreams((prev) => ({ ...prev, [sid]: nextInfo }));
+            } else if (ev.track.kind === 'audio') {
+              if (!audioStream.getTracks().some((t) => t.id === ev.track.id)) {
+                audioStream.addTrack(ev.track);
+              }
+              const nextAudioStream = new MediaStream(audioStream.getTracks());
+              const nextInfo = {
+                ...(rtcRemoteStreamsRef.current[sid] || {}),
+                audioStream: nextAudioStream,
+              };
+              rtcRemoteStreamsRef.current[sid] = nextInfo;
+              setRtcRemoteStreams((prev) => ({ ...prev, [sid]: nextInfo }));
             }
-            // Emit fresh MediaStream wrapper so RtcLiveVideo re-attaches when audio track arrives after video
-            setRtcRemoteStreams((prev) => ({
-              ...prev,
-              [sid]: new MediaStream(remoteStream.getTracks()),
-            }));
           };
 
           pc.onicecandidate = (ev) => {
@@ -485,23 +573,31 @@ export default function AdminPage() {
 
           pc.onconnectionstatechange = () => {
             const state = pc.connectionState;
+            const scheduleBackoff = () => {
+              const fails = (rtcFailCountRef.current[sid] || 0) + 1;
+              rtcFailCountRef.current[sid] = fails;
+              const backoffMs =
+                fails === 1 ? 2500 : fails === 2 ? 8000 : HAS_TURN_SERVER ? 12000 : 45000;
+              rtcRetryAtRef.current[sid] = Date.now() + backoffMs;
+            };
             if (state === 'connected') {
               if (entry.disconnectedTimer) {
                 clearTimeout(entry.disconnectedTimer);
                 entry.disconnectedTimer = null;
               }
+              rtcFailCountRef.current[sid] = 0;
               rtcConnectedRef.current[sid] = true;
               setRtcConnectedMap((prev) => ({ ...prev, [sid]: true }));
             } else if (state === 'failed' || state === 'closed') {
-              rtcRetryAtRef.current[sid] = Date.now() + 4000;
+              scheduleBackoff();
               closeRtcPeerForSession(sid);
             } else if (state === 'disconnected' && !entry.disconnectedTimer) {
               entry.disconnectedTimer = setTimeout(() => {
                 if (pc.connectionState !== 'connected') {
-                  rtcRetryAtRef.current[sid] = Date.now() + 4000;
+                  scheduleBackoff();
                   closeRtcPeerForSession(sid);
                 }
-              }, 3500);
+              }, 3000);
             }
           };
 
@@ -520,10 +616,10 @@ export default function AdminPage() {
               }),
             });
           } catch {
-            rtcRetryAtRef.current[sid] = Date.now() + 5000;
+            rtcRetryAtRef.current[sid] = Date.now() + 3000;
             closeRtcPeerForSession(sid);
           }
-          continue;
+          return;
         }
 
         const sig = feed.rtcSignal;
@@ -537,9 +633,9 @@ export default function AdminPage() {
               }
               entry.queuedCandidates = [];
             } catch {
-              rtcRetryAtRef.current[sid] = Date.now() + 4000;
+              rtcRetryAtRef.current[sid] = Date.now() + 2500;
               closeRtcPeerForSession(sid);
-              continue;
+              return;
             }
           }
 
@@ -556,7 +652,9 @@ export default function AdminPage() {
             }
           }
         }
-      }
+      });
+
+      await Promise.all(tasks);
     },
     [closeRtcPeerForSession]
   );
@@ -582,11 +680,19 @@ export default function AdminPage() {
       }
 
       const query = params.toString();
-      const res = await fetch(`/api/admin/monitor${query ? `?${query}` : ''}`, {
-        cache: 'no-store',
-      });
-      const json = await res.json();
-      if (json.success) {
+      const abortCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutHandle = abortCtrl ? setTimeout(() => abortCtrl.abort(), 5000) : null;
+      let json = null;
+      try {
+        const res = await fetch(`/api/admin/monitor${query ? `?${query}` : ''}`, {
+          cache: 'no-store',
+          signal: abortCtrl?.signal,
+        });
+        json = await res.json();
+      } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+      }
+      if (json?.success) {
         const nextKnown = {};
         const feeds = (json.feeds || []).map((f) => {
           const prevFrame = knownFramesRef.current[f.sessionId];
@@ -603,12 +709,25 @@ export default function AdminPage() {
         if (targetSid) {
           const target = feeds.find((f) => f.sessionId === targetSid);
           if (target) {
-            // If student restarted their audio stream (seq reset), resync admin sequence cursor
-            if ((target.latestAudioSeq || 0) < lastAudioSeqRef.current) {
+            // If student restarted their audio stream (epoch or seq reset), resync admin sequence cursor
+            const epochChanged =
+              lastAudioEpochRef.current !== null &&
+              typeof target.audioEpoch === 'number' &&
+              target.audioEpoch !== lastAudioEpochRef.current;
+            if (epochChanged || (target.latestAudioSeq || 0) < lastAudioSeqRef.current) {
               lastAudioSeqRef.current = Math.max(0, (target.latestAudioSeq || 0) - 2);
+              nextAudioTimeRef.current = 0;
             }
-            // Only play HTTP PCM fallback if WebRTC audio stream is not yet connected
-            if (!rtcConnectedRef.current[targetSid] && target.audioChunks?.length > 0) {
+            if (typeof target.audioEpoch === 'number') {
+              lastAudioEpochRef.current = target.audioEpoch;
+            }
+
+            const remoteInfo = rtcRemoteStreamsRef.current[targetSid];
+            const hasLiveRtcAudio =
+              rtcConnectedRef.current[targetSid] &&
+              remoteInfo?.audioStream?.getAudioTracks().some((t) => t.readyState === 'live');
+            // Play HTTP PCM fallback whenever WebRTC audio track isn't actively connected
+            if (!hasLiveRtcAudio && target.audioChunks?.length > 0) {
               playPcmChunks(target.audioChunks);
             }
           }
@@ -633,10 +752,12 @@ export default function AdminPage() {
       if (stopped) return;
       await fetchLiveFeeds();
       if (!stopped) {
-        const hasPendingRtc = Array.from(rtcPeersRef.current.values()).some(
-          (e) => e.pc?.connectionState !== 'connected'
-        );
-        const delay = listeningSessionIdRef.current || hasPendingRtc ? 280 : 600;
+        const hasPendingOrFallback =
+          Array.from(rtcPeersRef.current.values()).some(
+            (e) => e.pc?.connectionState !== 'connected'
+          ) ||
+          Object.keys(knownFramesRef.current).some((sid) => !rtcConnectedRef.current[sid]);
+        const delay = listeningSessionIdRef.current || hasPendingOrFallback ? 280 : 600;
         timerId = setTimeout(loop, delay);
       }
     };
@@ -652,6 +773,7 @@ export default function AdminPage() {
   const handleToggleListen = (feed) => {
     if (listeningSessionId === feed.sessionId) {
       listeningSessionIdRef.current = null;
+      lastAudioEpochRef.current = null;
       setListeningSessionId(null);
       stopAudioPlayer();
       return;
@@ -664,8 +786,11 @@ export default function AdminPage() {
 
     // Start from slightly before latest chunk so initial playback starts cleanly without stale backlog
     lastAudioSeqRef.current = Math.max(0, (feed.latestAudioSeq || 0) - 2);
+    lastAudioEpochRef.current = typeof feed.audioEpoch === 'number' ? feed.audioEpoch : null;
     listeningSessionIdRef.current = feed.sessionId;
     setListeningSessionId(feed.sessionId);
+    // Immediately tell server & student to start streaming PCM audio without waiting for next poll tick
+    fetchLiveFeeds();
   };
 
   const handleTerminateStudent = async (feed) => {
@@ -1116,9 +1241,10 @@ export default function AdminPage() {
 
                       {/* Webcam Live Stream (WebRTC HD primary, JPEG snapshot fallback) */}
                       <div className="relative rounded-xl overflow-hidden bg-[#FAF8F5] border border-stone-200 aspect-[4/3] flex items-center justify-center">
-                        {rtcRemoteStreams[feed.sessionId] && rtcConnectedMap[feed.sessionId] ? (
+                        {rtcRemoteStreams[feed.sessionId]?.videoStream && rtcConnectedMap[feed.sessionId] ? (
                           <RtcLiveVideo
-                            stream={rtcRemoteStreams[feed.sessionId]}
+                            videoStream={rtcRemoteStreams[feed.sessionId].videoStream}
+                            audioStream={rtcRemoteStreams[feed.sessionId].audioStream}
                             muted={!isListening}
                           />
                         ) : feed.frameDataUrl ? (
@@ -1141,11 +1267,15 @@ export default function AdminPage() {
                           >
                             {feed.isPresent ? 'Present' : 'Not Visible'}
                           </span>
-                          {rtcConnectedMap[feed.sessionId] && (
+                          {rtcConnectedMap[feed.sessionId] ? (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-600/90 text-white backdrop-blur">
                               LIVE HD
                             </span>
-                          )}
+                          ) : feed.frameDataUrl ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-600/90 text-white backdrop-blur">
+                              Relay Live
+                            </span>
+                          ) : null}
                         </div>
                       </div>
 

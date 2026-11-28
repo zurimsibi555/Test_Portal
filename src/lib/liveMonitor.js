@@ -9,7 +9,7 @@ if (!globalForMonitor.__liveProctorFeed) {
 }
 
 const feedMap = globalForMonitor.__liveProctorFeed;
-const MAX_FEEDS = 40;
+const MAX_FEEDS = 60;
 const MAX_FRAME_LEN = 95000;
 const MAX_AUDIO_CHUNKS = 18;
 const MAX_CHUNK_LEN = 65000;
@@ -51,6 +51,9 @@ export function updateLiveFeed(sessionId, payload) {
   const existingChunks =
     !shouldResetAudio && Array.isArray(existing.audioChunks) ? existing.audioChunks : [];
   let latestAudioSeq = shouldResetAudio ? 0 : existingLatestSeq;
+  const audioEpoch = shouldResetAudio
+    ? (existing.audioEpoch || 0) + 1
+    : existing.audioEpoch || 0;
   const chunkMap = new Map();
   for (const ch of existingChunks) {
     if (ch && typeof ch.seq === 'number') {
@@ -121,6 +124,8 @@ export function updateLiveFeed(sessionId, payload) {
     audioLevel: payload.audioLevel ?? existing.audioLevel ?? 0,
     audioChunks: mergedChunks,
     latestAudioSeq,
+    audioEpoch,
+    streamEpoch: payload.streamEpoch ?? existing.streamEpoch ?? 0,
     rtcSignals: existingRtc,
     camGranted: payload.camGranted ?? existing.camGranted ?? false,
     micGranted: payload.micGranted ?? existing.micGranted ?? false,
@@ -208,6 +213,12 @@ export function getLiveFeed(sessionId) {
   return feedMap.get(sessionId) || null;
 }
 
+export function isAudioStreamRequested(sessionId) {
+  const entry = feedMap.get(sessionId);
+  if (!entry) return false;
+  return (entry.listenRequestedUntil || 0) > Date.now();
+}
+
 export function requestSessionTermination(sessionId, reason) {
   const existing = feedMap.get(sessionId) || { sessionId };
   const updated = {
@@ -245,6 +256,9 @@ export function listActiveLiveFeeds(maxAgeMs = 45000, options = {}) {
       }
 
       const isListened = listeningSessionId && id === listeningSessionId;
+      if (isListened) {
+        entry.listenRequestedUntil = now + 5500;
+      }
       const pendingAudioChunks = isListened
         ? (entry.audioChunks || []).filter((ch) => ch.seq > afterAudioSeq)
         : [];
@@ -262,6 +276,8 @@ export function listActiveLiveFeeds(maxAgeMs = 45000, options = {}) {
         frameSeq: currentFrameSeq,
         audioLevel: entry.audioLevel || 0,
         latestAudioSeq: entry.latestAudioSeq || 0,
+        audioEpoch: entry.audioEpoch || 0,
+        streamEpoch: entry.streamEpoch || 0,
         audioChunks: pendingAudioChunks,
         rtcSignal,
         camGranted: entry.camGranted,

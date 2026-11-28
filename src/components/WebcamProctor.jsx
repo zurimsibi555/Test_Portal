@@ -12,7 +12,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { downsampleFloat32ToInt16, int16ToBase64 } from '@/lib/audioPcm';
-import { RTC_ICE_SERVERS } from '@/lib/webrtcConfig';
+import { RTC_CONFIG } from '@/lib/webrtcConfig';
 
 const TARGET_SAMPLE_RATE = 16000;
 const SAMPLES_PER_CHUNK = 4800; // 300ms of clear 16kHz wideband voice
@@ -59,6 +59,8 @@ export default function WebcamProctor({
   const rtcOutgoingRef = useRef({ answers: [], candidates: [] });
   const hasConnectedRtcRef = useRef(false);
   const hasVerifiedRtcAudioRef = useRef(false);
+  const audioRequestedRef = useRef(false);
+  const streamEpochRef = useRef(0);
 
   // Voice PCM streaming refs (Priority #1)
   const audioQueueRef = useRef([]);
@@ -259,6 +261,7 @@ export default function WebcamProctor({
 
     async function initMedia() {
       notifyPerms(false, false, true, '', false);
+      streamEpochRef.current += 1;
       audioSeqRef.current = 0;
       audioResetPendingRef.current = true;
       audioQueueRef.current = [];
@@ -286,15 +289,16 @@ export default function WebcamProctor({
 
         localStream = await navigator.mediaDevices.getUserMedia({
           video: {
-            width: { ideal: 640, max: 640 },
-            height: { ideal: 480, max: 480 },
-            frameRate: { ideal: 24, max: 30 },
+            width: { ideal: 480, max: 640 },
+            height: { ideal: 360, max: 480 },
+            frameRate: { ideal: 20, max: 24 },
             facingMode: 'user',
           },
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
+            channelCount: 1,
           },
         });
       } catch (err) {
@@ -597,12 +601,15 @@ export default function WebcamProctor({
         captureCtxRef.current.resume().catch(() => {});
       }
 
-      // Verify live track health continuously
+      // Verify live track health continuously & ensure audio track stays enabled
       const vTrack = stream.getVideoTracks()[0];
       const aTrack = stream.getAudioTracks()[0];
       if (!vTrack || vTrack.readyState !== 'live' || !aTrack || aTrack.readyState !== 'live') {
         notifyPerms(false, false, false, 'Camera or Microphone stopped. Both must remain active.');
         return;
+      }
+      if (!aTrack.enabled) {
+        aTrack.enabled = true;
       }
 
       const mutedNow = Boolean(aTrack.muted);
@@ -767,7 +774,7 @@ export default function WebcamProctor({
               entry.pc.close();
             } catch {}
           }
-          const pc = new RTCPeerConnection({ iceServers: RTC_ICE_SERVERS });
+          const pc = new RTCPeerConnection(RTC_CONFIG);
           entry = {
             pc,
             offerId: req.offerId,
@@ -785,9 +792,16 @@ export default function WebcamProctor({
                 if (!params.encodings || params.encodings.length === 0) {
                   params.encodings = [{}];
                 }
-                params.encodings[0].maxBitrate = 450000;
-                params.encodings[0].maxFramerate = 24;
-                sender.setParameters(params).catch(() => {});
+                params.encodings[0].maxBitrate = 380000;
+                params.encodings[0].maxFramerate = 20;
+                try {
+                  await sender.setParameters({
+                    ...params,
+                    degradationPreference: 'maintain-framerate',
+                  });
+                } catch {
+                  sender.setParameters(params).catch(() => {});
+                }
               } catch {}
             }
           }
@@ -856,11 +870,17 @@ export default function WebcamProctor({
       const rtcConnected = hasConnectedRtcRef.current;
       const rtcAudioVerified = hasVerifiedRtcAudioRef.current;
 
-      // Only skip HTTP PCM chunks once WebRTC outbound audio RTP packets are verified flowing
-      if (rtcAudioVerified && audioQueueRef.current.length > 0) {
-        audioQueueRef.current = [];
+      // Only skip HTTP PCM chunks once WebRTC outbound audio RTP packets are verified flowing.
+      // When Admin is not actively listening in fallback mode, retain a rolling ~1s ring buffer locally to save mobile bandwidth.
+      if (rtcAudioVerified) {
+        if (audioQueueRef.current.length > 0) {
+          audioQueueRef.current = [];
+        }
+      } else if (!audioRequestedRef.current && audioQueueRef.current.length > 3) {
+        audioQueueRef.current = audioQueueRef.current.slice(-3);
       }
-      const audioChunks = rtcAudioVerified ? [] : audioQueueRef.current.slice(0, 6);
+      const audioChunks =
+        !rtcAudioVerified && audioRequestedRef.current ? audioQueueRef.current.slice(0, 6) : [];
       const shouldResetAudio = audioResetPendingRef.current;
 
       const outAnswers = rtcOutgoingRef.current.answers.slice(0, 4);
@@ -870,14 +890,13 @@ export default function WebcamProctor({
           ? { answers: outAnswers, candidates: outCandidates }
           : null;
 
-      // In fallback mode, send JPEG snapshots every 450ms (~2+ fps); when WebRTC is live, keep 4s backup thumbnail
+      // In fallback mode, send lightweight 280x210 JPEG snapshots smoothly (~3 fps); when WebRTC is live, keep 4s backup thumbnail
       let frameDataUrl = null;
-      const frameIntervalMs = rtcConnected ? 4000 : 450;
+      const fallbackFrameMs = lastPingDurationMs > 900 ? 750 : 340;
+      const frameIntervalMs = rtcConnected ? 4000 : fallbackFrameMs;
       const shouldSendFrame =
         camGrantedRef.current &&
-        (rtcConnected || audioQueueRef.current.length <= 2) &&
-        now - lastFrameSentAt >= frameIntervalMs &&
-        lastPingDurationMs < 900;
+        now - lastFrameSentAt >= frameIntervalMs;
 
       if (shouldSendFrame) {
         const canvas = streamCanvasRef.current;
@@ -885,10 +904,10 @@ export default function WebcamProctor({
         if (canvas && video && video.readyState >= 2) {
           try {
             const ctx = canvas.getContext('2d');
-            canvas.width = 200;
-            canvas.height = 150;
-            ctx.drawImage(video, 0, 0, 200, 150);
-            frameDataUrl = canvas.toDataURL('image/jpeg', 0.42);
+            canvas.width = 280;
+            canvas.height = 210;
+            ctx.drawImage(video, 0, 0, 280, 210);
+            frameDataUrl = canvas.toDataURL('image/jpeg', 0.46);
             lastFrameSentAt = now;
           } catch {
             // ignore
@@ -897,10 +916,13 @@ export default function WebcamProctor({
       }
 
       const startedAt = Date.now();
+      const abortCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutHandle = abortCtrl ? setTimeout(() => abortCtrl.abort(), 5000) : null;
       try {
         const res = await fetch('/api/proctor/ping', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: abortCtrl?.signal,
           body: JSON.stringify({
             sessionId: activeSessionId,
             studentName,
@@ -911,6 +933,7 @@ export default function WebcamProctor({
             audioLevel: micLevelRef.current,
             audioChunks,
             audioReset: shouldResetAudio,
+            streamEpoch: streamEpochRef.current,
             rtcSignal,
             camGranted: camGrantedRef.current,
             micGranted: micGrantedRef.current,
@@ -926,7 +949,8 @@ export default function WebcamProctor({
             audioResetPendingRef.current = false;
           }
           if (audioChunks.length > 0) {
-            audioQueueRef.current.splice(0, audioChunks.length);
+            const maxAckSeq = audioChunks[audioChunks.length - 1].seq;
+            audioQueueRef.current = audioQueueRef.current.filter((c) => c.seq > maxAckSeq);
           }
           if (outAnswers.length > 0) {
             rtcOutgoingRef.current.answers.splice(0, outAnswers.length);
@@ -936,6 +960,7 @@ export default function WebcamProctor({
           }
         }
         const data = await res.json();
+        audioRequestedRef.current = Boolean(data.audioRequested);
         if (data.terminate && !isPrepareMode && onViolation) {
           onViolation(data.terminateReason || 'Exam terminated by Administrator');
         }
@@ -945,6 +970,7 @@ export default function WebcamProctor({
       } catch {
         lastPingDurationMs = Date.now() - startedAt;
       } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
         inFlight = false;
         if (!stopped) {
           const hasPendingRtc =
@@ -952,11 +978,11 @@ export default function WebcamProctor({
             rtcOutgoingRef.current.candidates.length > 0;
           const nextDelay = hasPendingRtc
             ? 60
-            : audioQueueRef.current.length > 0
-            ? 120
+            : audioRequestedRef.current && audioQueueRef.current.length > 0
+            ? 140
             : rtcConnected
             ? 650
-            : 280;
+            : 300;
           timerId = setTimeout(sendPing, nextDelay);
         }
       }
@@ -1070,6 +1096,12 @@ export default function WebcamProctor({
             {micGranted ? `${micLevel}%` : 'Off'}
           </span>
         </div>
+
+        {micGranted && micMuted && (
+          <div className="w-full py-1 px-2 rounded-lg bg-rose-50 border border-rose-300 text-rose-800 text-[10px] font-bold text-center">
+            Mic Muted on Device — Unmute Now
+          </div>
+        )}
 
         {micGranted && audioSuspended && (
           <button

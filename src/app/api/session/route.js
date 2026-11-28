@@ -59,7 +59,7 @@ export async function POST(req) {
     }
 
     const sessionId = crypto.randomBytes(8).toString('hex');
-    const durationSeconds = (test.durationMinutes || 120) * 60;
+    const durationSeconds = (test.durationMinutes || 90) * 60;
 
     const newSession = {
       id: sessionId,

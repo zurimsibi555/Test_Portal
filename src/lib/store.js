@@ -11,7 +11,7 @@ const initialData = {
       id: "demo-java-test",
       title: "Java Foundation Test",
       description: "Comprehensive evaluation covering Input/Output, Conditionals, Switch Cases, Loops, Functions, and OOPs concepts.",
-      durationMinutes: 120,
+      durationMinutes: 90,
       scheduledStartTime: "2026-11-28T13:00:00+05:30",
       entryWindowMinutes: 30,
       alwaysOpen: false,

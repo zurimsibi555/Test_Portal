@@ -51,7 +51,7 @@ export default function Home() {
                   title: 'Java Foundation Test',
                   description:
                     'Official Core Java, OOPs concepts, and Problem Solving examination.',
-                  durationMinutes: 120,
+                  durationMinutes: 90,
                   scheduledStartTime: '2026-11-28T13:00:00+05:30',
                   entryWindowMinutes: 30,
                   alwaysOpen: false,
@@ -71,9 +71,9 @@ export default function Home() {
     fetchTests();
   }, []);
 
-  // Live 1-second server-synced clock for schedule popup & 30-min expiry window
+  // Live 250ms server-synced clock so Start Test button unlocks cleanly at exact 1:00 PM
   useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now() + clockOffsetRef.current), 1000);
+    const timer = setInterval(() => setNowMs(Date.now() + clockOffsetRef.current), 250);
     return () => clearInterval(timer);
   }, []);
 
@@ -81,7 +81,7 @@ export default function Home() {
     id: 'demo-java-test',
     title: 'Java Foundation Test',
     description: 'Official Core Java, OOPs concepts, and Problem Solving examination.',
-    durationMinutes: 120,
+    durationMinutes: 90,
     scheduledStartTime: '2026-11-28T13:00:00+05:30',
     entryWindowMinutes: 30,
     alwaysOpen: false,
@@ -165,6 +165,27 @@ export default function Home() {
                   <h2 className="text-xl font-black text-stone-900">Exam Window Expired</h2>
                   <p className="text-xs text-stone-600 leading-relaxed">
                     <strong>{primaryTest.title}</strong> started on <strong>{formattedStart}</strong> and the 30-minute joining window has closed. You cannot attend this exam anymore.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowExamPopup(false)}
+                  className="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-bold transition"
+                >
+                  Close Notice
+                </button>
+              </>
+            ) : isBlockedAttended ? (
+              <>
+                <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center mx-auto">
+                  <AlertTriangle className="w-8 h-8" />
+                </div>
+                <div className="text-center space-y-2">
+                  <span className="inline-block px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-black uppercase tracking-wider">
+                    Already Attempted
+                  </span>
+                  <h2 className="text-xl font-black text-stone-900">{primaryTest.title}</h2>
+                  <p className="text-xs text-stone-600 leading-relaxed">
+                    You have already completed or submitted this examination. Re-entry is not permitted.
                   </p>
                 </div>
                 <button
@@ -312,7 +333,7 @@ export default function Home() {
               <div className="flex flex-col items-end gap-1.5 shrink-0">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#FAF8F5] border border-stone-200 text-stone-800 font-mono text-xs font-bold shadow-xs">
                   <Clock className="w-3.5 h-3.5 text-amber-700" />
-                  {primaryTest.durationMinutes || 120} Minutes
+                  {primaryTest.durationMinutes || 90} Minutes
                 </span>
                 <span className="text-[10px] font-semibold text-stone-500">
                   {isUpcoming

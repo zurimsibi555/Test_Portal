@@ -59,7 +59,7 @@ function TestContent() {
   const [mcqAnswers, setMcqAnswers] = useState({});
   const [codingSolutions, setCodingSolutions] = useState({});
   const [codingEvaluations, setCodingEvaluations] = useState({});
-  const [remainingSeconds, setRemainingSeconds] = useState(120 * 60);
+  const [remainingSeconds, setRemainingSeconds] = useState(90 * 60);
 
   // Violation & Submission confirmation (no scores shown to student)
   const [violationReason, setViolationReason] = useState('');
@@ -129,7 +129,7 @@ function TestContent() {
   }, [stage, verifyCamAndMic]);
 
   useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now() + clockOffsetRef.current), 1000);
+    const t = setInterval(() => setNowMs(Date.now() + clockOffsetRef.current), 250);
     return () => clearInterval(t);
   }, []);
 
@@ -149,7 +149,7 @@ function TestContent() {
           const mcqs = data.mcqQuestions.filter((q) => q.testId === test.id);
           const coding = data.codingQuestions.filter((q) => q.testId === test.id);
           setTestData({ ...test, mcqs, coding });
-          setRemainingSeconds((test.durationMinutes || 120) * 60);
+          setRemainingSeconds((test.durationMinutes || 90) * 60);
           if (hasCompletedCurrentExam(test, data.submissionCount, serverNow)) {
             setAlreadyAttended(true);
           }
@@ -298,9 +298,12 @@ function TestContent() {
   }, [stage]);
 
   const enterFullscreenAndStart = async () => {
-    const ok = await verifyCamAndMic();
-    if (!ok) return;
+    if (!preflightPerms.camGranted || !preflightPerms.micGranted) {
+      const ok = await verifyCamAndMic();
+      if (!ok) return;
+    }
 
+    // Call fullscreen & transition to EXAM synchronously inside user gesture so AudioContext starts un-suspended
     try {
       if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});
